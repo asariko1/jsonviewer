@@ -26,3 +26,9 @@ venues.json
 
 # Local Cloudflare deployment mirror (duplicate of the root files, kept locally for uploads only)
 cloudflare/
+
+# Internal docs, not part of the shared tool
+changelog.txt
+TODO.md
+faq.txt
+user\ guide.txt
