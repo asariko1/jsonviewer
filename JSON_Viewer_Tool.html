@@ -1,0 +1,2849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JSON Viewer | asariko</title>
+<meta name="description" content="Paste, upload, search, and compare JSON entirely in your browser. Nothing you open here is ever sent anywhere.">
+
+<!-- Logo -->
+<link rel="icon" type="image/png" href="assets/logo.png">
+<link rel="apple-touch-icon" href="assets/logo.png">
+
+<!-- Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+<!-- Custom CSS — just font-smoothing + scrollbar reset, shared across asariko tools -->
+<link rel="stylesheet" href="style.css">
+
+<style>
+  :root{
+    /* palette matches our other tools (TESS Comparison Tool / Copy Deck / Portfolio) exactly */
+    --bg:#f4f5f7; --panel-bg:#ffffff; --border:#e1e4ea; --border-strong:#c7ccd4;
+    --text:#1e293b; --muted:#94a3b8; --faint:#b7bec9; --heading:#1e293b;
+    --accent:#1565C0; --accent-dark:#0d47a1; --neutral-dark:#455066;
+    --btn-bg:#ffffff; --btn-bg-hover:#eef1f5; --btn-border:#c7ccd4;
+    --divider:#e1e4ea; --divider-hover:#b7bec9;
+    --error-bg:#fce4e4; --error-text:#a01e1e; --error-border:#f0b8b8;
+    --ok-bg:#e2f5e4; --ok-text:#156928;
+    --shadow: 0 1px 3px rgba(20,30,50,0.08), 0 1px 2px rgba(20,30,50,0.06);
+    --mark-bg:#fff2cc; --mark-text:#7a5b00; --mark-current-bg:#ffd6a5;
+    --mark-declared-bg:#e5d8fc; --mark-declared-text:#4a2b8f; --mark-declared-current-bg:#c9aef7;
+
+    --syn-key:#1565C0; --syn-string:#156928; --syn-number:#b45309; --syn-bool:#7c3aed;
+    --syn-null:#94a3b8; --syn-punc:#94a3b8;
+  }
+  [data-theme="dark"]{
+    --bg:#161b22; --panel-bg:#1e242c; --border:#333c48; --border-strong:#454f5e;
+    --text:#e2e6eb; --muted:#8b96a5; --faint:#6b7484; --heading:#e2e6eb;
+    --accent:#5b9bdb; --accent-dark:#8fc0f0; --neutral-dark:#7c8ba0;
+    --btn-bg:#232a33; --btn-bg-hover:#2b333e; --btn-border:#454f5e;
+    --divider:#333c48; --divider-hover:#4c5768;
+    --error-bg:#3a2020; --error-text:#ff9090; --error-border:#5a2a2a;
+    --ok-bg:#1f3a24; --ok-text:#8fd39a;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4);
+    --mark-bg:#5a4a10; --mark-text:#ffe9a0; --mark-current-bg:#8a6a10;
+    --mark-declared-bg:#3d2d63; --mark-declared-text:#dcc8ff; --mark-declared-current-bg:#5c3f94;
+
+    --syn-key:#7fb0e6; --syn-string:#8fd39a; --syn-number:#e0a56e; --syn-bool:#c39bf0;
+    --syn-null:#8b96a5; --syn-punc:#8b96a5;
+  }
+  /* syntax color themes -- default is set on :root/[data-theme=dark] above */
+  html[data-syntax="vivid"]{
+    --syn-key:#0b5fff; --syn-string:#0a8f4a; --syn-number:#c2410c; --syn-bool:#8b1fc2;
+    --syn-null:#9a9a9a; --syn-punc:#707070;
+  }
+  html[data-syntax="vivid"][data-theme="dark"]{
+    --syn-key:#6ea8ff; --syn-string:#5fe0a0; --syn-number:#ffb066; --syn-bool:#d68bff;
+    --syn-null:#9a9a9a; --syn-punc:#9a9a9a;
+  }
+  html[data-syntax="solarized"]{
+    --syn-key:#268bd2; --syn-string:#2aa198; --syn-number:#b58900; --syn-bool:#cb4b16;
+    --syn-null:#93a1a1; --syn-punc:#93a1a1;
+  }
+  html[data-syntax="solarized"][data-theme="dark"]{
+    --syn-key:#5aa8e8; --syn-string:#4fc3b8; --syn-number:#d9b100; --syn-bool:#e2703a;
+    --syn-null:#8a9a9a; --syn-punc:#7a8a8a;
+  }
+  html[data-syntax="pastel"]{
+    --syn-key:#5b7fae; --syn-string:#6fae7f; --syn-number:#b98b4e; --syn-bool:#b06fa0;
+    --syn-null:#a8a8a8; --syn-punc:#a0a0a0;
+  }
+  html[data-syntax="pastel"][data-theme="dark"]{
+    --syn-key:#9db4d9; --syn-string:#a8d9b4; --syn-number:#d9b98b; --syn-bool:#d9a8cf;
+    --syn-null:#a8a8a8; --syn-punc:#a0a0a0;
+  }
+  html[data-syntax="mono"]{
+    --syn-key:var(--text); --syn-string:var(--text); --syn-number:var(--text);
+    --syn-bool:var(--text); --syn-null:var(--muted); --syn-punc:var(--muted);
+  }
+
+  *{box-sizing:border-box;}
+  [hidden]{display:none!important;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:14px;display:flex;flex-direction:column;overflow:hidden;
+  }
+  button{font-family:inherit;}
+
+  /* ---- asariko site header/footer ----
+     This tool fills the whole viewport (no page scroll), so unlike the other
+     asariko pages the navbar is NOT position:fixed / transparent-until-scroll
+     (that effect depends on a window scroll event that never fires here) —
+     it's a normal, always-solid bar and part of the column flex flow instead.
+     Colors here are deliberately hardcoded to the light palette, not the
+     --var tokens above: the asariko brand identity has no dark-mode version
+     anywhere in the portfolio, so this bar stays light-only on purpose even
+     when the app body below it is switched to dark mode. */
+  #siteHeader{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;
+    padding:10px 20px;background:#ffffff;border-bottom:1px solid #e1e4ea;
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  #siteHeader img{height:26px;width:auto;display:block;}
+  #siteHeader nav{display:flex;align-items:center;gap:22px;}
+  #siteHeader nav a{font-size:13px;font-weight:500;color:#94a3b8;text-decoration:none;}
+  #siteHeader nav a:hover{color:#1e293b;}
+
+  #siteFooter{
+    flex:0 0 auto;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;
+    padding:8px 20px;background:#ffffff;border-top:1px solid #e1e4ea;
+    font-family:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:11.5px;color:#94a3b8;
+  }
+  #siteFooter a{color:#94a3b8;text-decoration:none;}
+  #siteFooter a:hover{color:#1e293b;text-decoration:underline;}
+  #siteFooter .sep{color:#b7bec9;}
+
+  #toolbar{
+    display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--panel-bg);
+    border-bottom:1px solid var(--border);flex:0 0 auto;flex-wrap:wrap;
+  }
+  .brand{font-weight:700;font-size:15px;color:var(--heading);margin-right:6px;white-space:nowrap;}
+  .tb-group{display:flex;align-items:center;gap:6px;}
+  .tb-sep{width:1px;align-self:stretch;background:var(--border);margin:0 4px;}
+  .tb-spacer{flex:1 1 auto;}
+
+  .btn{
+    display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--btn-border);
+    background:var(--btn-bg);border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--text);
+    white-space:nowrap;transition:background-color .15s ease,border-color .15s ease,color .15s ease;
+  }
+  .btn:hover{background:var(--btn-bg-hover);border-color:var(--neutral-dark);}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .btn.icon{padding:7px 9px;font-size:14px;line-height:1;}
+  .btn.active{background:var(--neutral-dark);color:#fff;border-color:var(--neutral-dark);}
+
+  .select{
+    padding:6px 10px;border:1px solid var(--btn-border);background:var(--btn-bg);border-radius:6px;
+    cursor:pointer;font-size:12.5px;color:var(--text);transition:background-color .15s ease,border-color .15s ease;
+  }
+  .select:hover{background:var(--btn-bg-hover);border-color:var(--neutral-dark);}
+
+  #statusBar{
+    display:flex;align-items:center;gap:14px;padding:6px 14px;background:var(--panel-bg);
+    border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);flex:0 0 auto;min-height:26px;
+  }
+  #statusBar .status-ok{color:var(--ok-text);}
+  #statusBar .status-error{color:var(--error-text);}
+  #statusBar .dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;}
+
+  #panels{flex:1 1 auto;display:flex;min-height:0;min-width:0;overflow:hidden;}
+  #panels.layout-col{flex-direction:column;}
+  #panels.layout-row{flex-direction:row;}
+
+  #comparePanels{flex:1 1 auto;display:flex;flex-direction:row;min-height:0;min-width:0;overflow:hidden;}
+  #comparePanels .divider{width:6px;cursor:col-resize;}
+
+  .panel{
+    background:var(--panel-bg);display:flex;flex-direction:column;min-width:0;min-height:0;flex:1 1 0;
+  }
+  .panel-header{
+    position:relative;
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:6px 10px;border-bottom:1px solid var(--border);flex:0 0 auto;
+  }
+  .panel-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+  .view-tabs{display:flex;gap:4px;}
+  .tab{
+    padding:5px 10px;border:1px solid var(--btn-border);background:var(--btn-bg);border-radius:5px;
+    cursor:pointer;font-size:12px;color:var(--text);
+    transition:background-color .15s ease,border-color .15s ease,color .15s ease;
+  }
+  .tab:hover{background:var(--btn-bg-hover);border-color:var(--neutral-dark);}
+  .tab.active{background:var(--neutral-dark);color:#fff;border-color:var(--neutral-dark);font-weight:700;}
+  .panel-actions{display:flex;gap:4px;}
+
+  .code-area{flex:1 1 auto;display:flex;min-height:0;overflow:hidden;}
+  .line-numbers{
+    flex:0 0 auto;overflow:hidden;user-select:none;text-align:right;
+    padding:12px 10px 12px 14px;background:var(--bg);color:var(--faint);
+    border-right:1px solid var(--border);
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;white-space:pre;
+  }
+  #sourceLineNumbers{line-height:1.6;}
+  #outputLineNumbers{line-height:1.7;}
+
+  #sourceInput{
+    flex:1 1 auto;width:100%;resize:none;border:none;outline:none;padding:12px 14px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.6;
+    background:var(--panel-bg);color:var(--text);min-height:0;
+  }
+  #sourcePanel.dragover{outline:2px dashed var(--accent);outline-offset:-6px;}
+
+  .divider{
+    flex:0 0 auto;background:var(--divider);position:relative;z-index:2;
+    transition:background-color .15s ease;
+  }
+  #panels.layout-row .divider{width:6px;cursor:col-resize;}
+  #panels.layout-col .divider{height:6px;cursor:row-resize;}
+  .divider:hover,.divider.dragging{background:var(--divider-hover);}
+
+  .output-content{
+    flex:1 1 auto;overflow:auto;min-height:0;padding:12px 14px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.7;
+  }
+  .output-content .placeholder{color:var(--faint);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .output-content .error-box{
+    background:var(--error-bg);color:var(--error-text);border:1px solid var(--error-border);
+    border-radius:8px;padding:10px 14px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:13px;white-space:pre-wrap;
+  }
+
+  .compare-col .panel-header{justify-content:space-between;}
+  .compare-session-select{flex:1 1 auto;min-width:0;}
+  .compare-search-bar{
+    padding:6px 10px;border-bottom:1px solid var(--border);flex:0 0 auto;
+  }
+  .compare-search-row{display:flex;align-items:center;gap:6px;}
+  .compare-search-bar input{
+    flex:1 1 auto;min-width:0;border:1px solid var(--btn-border);border-radius:5px;padding:5px 8px;
+    font-size:12px;background:var(--bg);color:var(--text);outline:none;
+  }
+  .compare-search-bar input:focus{border-color:var(--accent);}
+  .compare-search-bar .search-count{font-size:11px;color:var(--muted);white-space:nowrap;min-width:44px;}
+  .compare-search-breadcrumb{
+    margin-top:4px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+
+  .jv-key{color:var(--syn-key);}
+  .jv-string{color:var(--syn-string);}
+  .jv-number{color:var(--syn-number);}
+  .jv-bool{color:var(--syn-bool);}
+  .jv-null{color:var(--syn-null);}
+  .jv-punc{color:var(--syn-punc);}
+
+  .jv-mark{background:var(--mark-bg);color:var(--mark-text);border-radius:2px;}
+  .jv-mark.jv-current{background:var(--mark-current-bg);}
+  /* matches found via a declaration (in:/type:/has:) get a distinct color from
+     plain-text matches, so it's visually clear which part of a query found them */
+  .jv-mark-declared{background:var(--mark-declared-bg);color:var(--mark-declared-text);border-radius:2px;}
+  .jv-mark-declared.jv-current{background:var(--mark-declared-current-bg);}
+
+  /* Tree + collapsible share row/indent structure */
+  .tv-node{white-space:nowrap;}
+  .tv-children{margin-left:16px;border-left:1px solid var(--border);padding-left:10px;}
+  .tv-row{display:flex;align-items:flex-start;gap:4px;}
+  .tv-toggle{
+    flex:0 0 auto;width:14px;text-align:center;color:var(--faint);cursor:pointer;user-select:none;
+    font-size:10px;line-height:1.9;
+  }
+  .tv-toggle.spacer{cursor:default;visibility:hidden;}
+  .tv-key{color:var(--syn-key);}
+  .tv-summary{color:var(--faint);cursor:pointer;}
+  .tv-punc{color:var(--syn-punc);}
+  .tv-comma{color:var(--syn-punc);}
+  .tv-jump{
+    flex:0 0 auto;opacity:0;margin-left:6px;
+    border:1px solid var(--border-strong);background:var(--btn-bg);color:var(--muted);
+    cursor:pointer;font-size:10.5px;padding:1px 6px;border-radius:4px;line-height:1.5;
+    transition:opacity .1s ease,background-color .15s ease,border-color .15s ease;
+  }
+  .tv-row:hover .tv-jump{opacity:1;}
+  .tv-jump:hover{background:var(--btn-bg-hover);color:var(--text);border-color:var(--accent);}
+
+  #searchBar{
+    position:absolute;top:100%;right:0;margin-top:6px;z-index:20;display:flex;flex-direction:column;
+    background:var(--panel-bg);border:1px solid var(--border-strong);border-radius:8px;
+    padding:8px 10px;box-shadow:var(--shadow);width:420px;max-width:90vw;
+    transform:translateY(-10px);opacity:0;pointer-events:none;
+    transition:transform .2s ease,opacity .2s ease;
+  }
+  #searchBar.open{transform:translateY(0);opacity:1;pointer-events:auto;}
+  .search-bar-row{position:relative;display:flex;align-items:center;gap:6px;}
+  .search-breadcrumb{
+    padding:4px 2px 0;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+
+  /* Floats directly above the current search match (positioned in JS from the
+     match's own bounding rect) so it never covers the rest of that line --
+     e.g. searching "Main" inside "Main Dining Room..." puts this above just
+     the word "Main", leaving the rest of the value fully readable below it. */
+  #matchJumpFloat{
+    position:fixed;z-index:30;transform:translate(-50%,-100%) translateY(-6px);
+    border:1px solid var(--border-strong);background:var(--panel-bg);color:var(--text);
+    cursor:pointer;font-size:11px;padding:3px 8px;border-radius:5px;box-shadow:var(--shadow);
+    white-space:nowrap;
+  }
+  #matchJumpFloat:hover{background:var(--btn-bg-hover);}
+  .search-results-list{
+    margin-top:6px;padding-top:6px;border-top:1px solid var(--border);
+    max-height:260px;overflow-y:auto;
+  }
+  .search-result-item{
+    padding:6px 6px;border-radius:5px;cursor:pointer;
+  }
+  .search-result-item:hover,.search-result-item.active{background:var(--btn-bg-hover);}
+  .search-result-path{
+    font-size:11px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px;
+  }
+  .search-result-snippet{
+    font-size:12px;color:var(--text);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .search-result-snippet mark{background:var(--mark-bg);color:var(--mark-text);border-radius:2px;}
+  .search-results-empty{padding:8px 6px;font-size:12px;color:var(--muted);}
+
+  .field-dropdown{
+    position:absolute;top:100%;left:0;margin-top:6px;z-index:21;min-width:220px;max-width:320px;
+    max-height:240px;overflow-y:auto;background:var(--panel-bg);border:1px solid var(--border-strong);
+    border-radius:8px;box-shadow:var(--shadow);padding:4px;
+  }
+  .field-dropdown-item{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    padding:6px 8px;border-radius:5px;cursor:pointer;font-size:12.5px;color:var(--text);
+  }
+  .field-dropdown-item:hover,.field-dropdown-item.active{background:var(--btn-bg-hover);}
+  .field-dropdown-empty{padding:8px;font-size:12px;color:var(--muted);}
+
+  .expand-menu-wrap{position:relative;}
+  .expand-coachmark{
+    position:absolute;top:100%;right:0;margin-top:6px;z-index:22;width:220px;
+    background:var(--accent);color:#fff;border-radius:8px;box-shadow:var(--shadow);
+    padding:10px 12px;font-size:12px;line-height:1.4;
+  }
+  .expand-coachmark button{
+    display:block;margin-top:8px;border:1px solid rgba(255,255,255,.5);background:rgba(255,255,255,.15);
+    color:#fff;border-radius:5px;padding:4px 10px;font-size:11.5px;cursor:pointer;
+  }
+  .expand-coachmark button:hover{background:rgba(255,255,255,.25);}
+  .expand-menu{
+    position:absolute;top:100%;right:0;margin-top:6px;z-index:21;width:240px;
+    background:var(--panel-bg);border:1px solid var(--border-strong);border-radius:8px;
+    box-shadow:var(--shadow);padding:6px;
+  }
+  .expand-menu-item{
+    display:block;width:100%;text-align:left;padding:7px 8px;border:none;background:none;
+    border-radius:5px;cursor:pointer;font-size:12.5px;color:var(--text);
+  }
+  .expand-menu-item:hover{background:var(--btn-bg-hover);}
+  .expand-menu-divider{height:1px;background:var(--border);margin:6px 2px;}
+  .expand-menu-label{
+    padding:4px 8px 2px;font-size:11px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.03em;
+  }
+  .expand-chip-list{display:flex;flex-wrap:wrap;gap:5px;padding:4px 8px;}
+  .expand-chip-list:empty{padding:0;}
+  .expand-chip{
+    display:flex;align-items:center;gap:5px;padding:3px 4px 3px 9px;border-radius:999px;
+    background:var(--neutral-dark);color:#fff;font-size:11.5px;white-space:nowrap;
+  }
+  .expand-chip button{
+    border:none;background:rgba(255,255,255,.2);color:#fff;border-radius:50%;
+    width:15px;height:15px;line-height:1;font-size:10px;cursor:pointer;padding:0;
+  }
+  .expand-input-wrap{position:relative;padding:2px 8px 4px;}
+  .expand-field-input{
+    width:100%;border:1px solid var(--btn-border);border-radius:5px;padding:6px 8px;
+    font-size:12px;background:var(--bg);color:var(--text);outline:none;box-sizing:border-box;
+  }
+  .expand-field-input:focus{border-color:var(--accent);}
+  .expand-input-wrap .field-dropdown{left:8px;right:8px;width:auto;}
+  #searchInput{
+    border:1px solid var(--btn-border);border-radius:5px;padding:6px 8px;font-size:12.5px;
+    background:var(--bg);color:var(--text);outline:none;
+    /* flexible + min-width:0 instead of a fixed width -- a fixed width here,
+       combined with the field-helper/count/prev/next/results-list/close
+       buttons sharing this row, added up to more than #searchBar's own width
+       and silently pushed the last one or two buttons off-screen with no
+       visible overflow or wrapping. */
+    flex:1 1 auto;min-width:0;
+  }
+  #searchInput:focus{border-color:var(--accent);}
+  #searchCount{font-size:11.5px;color:var(--muted);white-space:nowrap;min-width:50px;}
+
+  #toast{
+    position:fixed;bottom:18px;left:50%;transform:translateX(-50%) translateY(12px);
+    background:var(--text);color:var(--panel-bg);padding:8px 16px;border-radius:6px;font-size:12.5px;
+    opacity:0;pointer-events:none;transition:opacity .15s ease,transform .15s ease;z-index:30;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  ::-webkit-scrollbar{width:10px;height:10px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background-color:var(--border-strong);border-radius:20px;}
+  ::-webkit-scrollbar-thumb:hover{background-color:var(--faint);}
+
+  /* body is now the outer column: site header / #appShell (row: sidebar + mainColumn) / site footer.
+     #appShell carries the flex-direction:row + overflow:hidden that used to live directly on body. */
+  #appShell{flex:1 1 auto;display:flex;flex-direction:row;min-height:0;overflow:hidden;}
+  #mainColumn{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;overflow:hidden;}
+
+  #sidebar{
+    flex:0 0 auto;width:220px;display:flex;flex-direction:column;min-height:0;
+    background:var(--panel-bg);border-right:1px solid var(--border);
+    transition:width .18s ease;overflow:hidden;
+  }
+  /* Collapses to a thin rail (not zero width) specifically so the toggle
+     button -- which lives inside the sidebar's own header, not floating
+     outside it -- stays visible and clickable in both states. */
+  #sidebar.collapsed{width:41px;}
+  #sidebar.collapsed .sidebar-title,
+  #sidebar.collapsed #btnNewSession,
+  #sidebar.collapsed .session-list,
+  #sidebar.collapsed .sidebar-nav{display:none;}
+  #sidebar.collapsed .sidebar-header{justify-content:center;padding:10px 0;}
+  #sidebar.collapsed .handle-label{display:none;}
+
+  .sidebar-section{display:flex;flex-direction:column;min-height:0;}
+  .sidebar-section + .sidebar-section{border-top:1px solid var(--border);}
+  .sidebar-header{
+    display:flex;align-items:center;justify-content:space-between;padding:10px 12px;flex:0 0 auto;
+  }
+  .sidebar-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+  #btnToggleSidebar{display:flex;align-items:center;gap:4px;}
+
+  .session-list{flex:1 1 auto;overflow-y:auto;padding:0 6px 6px;min-height:60px;}
+  .session-item{
+    display:flex;align-items:center;gap:6px;padding:7px 8px;border-radius:6px;cursor:pointer;
+    font-size:12.5px;color:var(--text);white-space:nowrap;
+  }
+  .session-item:hover{background:var(--btn-bg-hover);}
+  .session-item.active{background:var(--neutral-dark);color:#fff;}
+  .session-item.active .session-delete{color:#fff;}
+  .session-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;}
+  .session-name-input{
+    flex:1 1 auto;font:inherit;color:inherit;background:var(--bg);border:1px solid var(--accent);
+    border-radius:4px;padding:1px 4px;min-width:0;
+  }
+  .session-delete{
+    flex:0 0 auto;opacity:0;color:var(--muted);border:none;background:none;cursor:pointer;
+    font-size:13px;line-height:1;padding:2px 4px;border-radius:4px;
+  }
+  .session-item:hover .session-delete{opacity:1;}
+  .session-delete:hover{background:rgba(0,0,0,.15);}
+
+  .sidebar-nav{padding:6px;flex:0 0 auto;}
+  .sidebar-link{
+    display:block;width:100%;text-align:left;padding:8px 8px;border:none;background:none;
+    border-radius:6px;cursor:pointer;font-size:12.5px;color:var(--text);
+  }
+  .sidebar-link:hover{background:var(--btn-bg-hover);}
+
+  .modal-overlay{
+    position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40;
+    display:flex;align-items:center;justify-content:center;padding:24px;
+  }
+  .modal-box{
+    background:var(--panel-bg);border-radius:10px;box-shadow:var(--shadow);
+    width:640px;max-width:100%;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;
+  }
+  .modal-header{
+    display:flex;align-items:center;justify-content:space-between;padding:14px 18px;
+    border-bottom:1px solid var(--border);flex:0 0 auto;
+  }
+  .modal-header span{font-size:15px;font-weight:700;color:var(--heading);}
+  .modal-body{padding:18px 22px 24px;overflow-y:auto;font-size:13.5px;line-height:1.6;color:var(--text);}
+  .modal-body h3{font-size:16px;margin:20px 0 6px;color:var(--heading);}
+  .modal-body h3:first-child{margin-top:0;}
+  .modal-body h4{font-size:13px;margin:14px 0 4px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+  .modal-body p{margin:0 0 10px;}
+  .modal-body ul{margin:0 0 10px;padding-left:20px;}
+  .modal-body li{margin:0 0 4px;}
+  .modal-body .changelog-version{font-size:14px;font-weight:700;color:var(--heading);margin:18px 0 2px;}
+  .modal-body .changelog-version:first-child{margin-top:0;}
+  .modal-body .changelog-date{font-size:12px;color:var(--muted);margin:0 0 8px;}
+</style>
+</head>
+<body>
+
+<header id="siteHeader">
+  <a href="https://asariko.net"><img src="assets/logo.png" alt="asariko logo"></a>
+  <nav>
+    <a href="https://asariko.net">Home</a>
+    <a href="https://asariko.net/projects">Projects</a>
+  </nav>
+</header>
+
+<div id="appShell">
+<aside id="sidebar">
+  <div class="sidebar-section" style="flex:1 1 auto;">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Sessions</span>
+      <div class="tb-group">
+        <button class="btn icon" id="btnNewSession" title="New session">＋</button>
+        <button class="btn icon" id="btnToggleSidebar" title="Close panel">
+          <span class="handle-icon">‹</span><span class="handle-label">Close</span>
+        </button>
+      </div>
+    </div>
+    <div class="session-list" id="sessionList"></div>
+  </div>
+  <div class="sidebar-section sidebar-nav">
+    <button class="sidebar-link" data-page="guide">User Guide</button>
+    <button class="sidebar-link" data-page="faq">FAQ</button>
+    <button class="sidebar-link" data-page="changelog">Changelog</button>
+  </div>
+</aside>
+
+<div id="mainColumn">
+<header id="toolbar">
+  <div class="brand">JSON Viewer</div>
+
+  <div class="tb-group">
+    <button class="btn" id="btnUpload" title="Upload a .json/.txt file">⇧ Upload</button>
+    <input type="file" id="fileInput" hidden accept=".json,.txt,application/json">
+    <button class="btn" id="btnClear" title="Clear everything">Clear</button>
+  </div>
+
+  <div class="tb-spacer"></div>
+
+  <div class="tb-group">
+    <button class="btn icon" id="btnCompare" title="Compare two sessions side by side">⇄</button>
+    <button class="btn icon" id="btnLayout" title="Toggle side-by-side / stacked layout">⬌</button>
+    <select class="select" id="syntaxTheme" title="Syntax color theme">
+      <option value="default">Colors: Default</option>
+      <option value="vivid">Colors: Vivid</option>
+      <option value="solarized">Colors: Solarized</option>
+      <option value="pastel">Colors: Pastel</option>
+      <option value="mono">Colors: Monochrome</option>
+    </select>
+    <button class="btn icon" id="btnTheme" title="Toggle light/dark theme">☾</button>
+  </div>
+</header>
+
+<div id="statusBar">
+  <span id="statusMsg">Paste JSON, drop a file, or click Upload to get started.</span>
+  <span id="statusMeta"></span>
+</div>
+
+<div id="panels" class="layout-row">
+  <section class="panel" id="sourcePanel">
+    <div class="panel-header">
+      <span class="panel-title">Source</span>
+    </div>
+    <div class="code-area">
+      <div class="line-numbers" id="sourceLineNumbers">1</div>
+      <textarea id="sourceInput" placeholder="Paste JSON here..." spellcheck="false"></textarea>
+    </div>
+  </section>
+
+  <div class="divider" id="divider"></div>
+
+  <section class="panel" id="outputPanel">
+    <div class="panel-header">
+      <div class="view-tabs" id="viewTabs">
+        <button class="tab" data-view="string">String</button>
+        <button class="tab active" data-view="tree">Tree</button>
+        <button class="tab" data-view="preview">Preview</button>
+        <button class="tab" data-view="collapsible">Collapsible</button>
+      </div>
+      <div class="panel-actions">
+        <div class="tb-group expand-menu-wrap" id="treeActions" hidden>
+          <button class="btn icon" id="btnExpandMenu" title="Expand options">⊞</button>
+          <div class="expand-menu" id="expandMenu" hidden>
+            <button class="expand-menu-item" id="menuExpandAll">Expand All</button>
+            <button class="expand-menu-item" id="menuCollapseAll">Collapse All</button>
+            <div class="expand-menu-divider"></div>
+            <div class="expand-menu-label">Expand only these fields</div>
+            <div class="expand-chip-list" id="expandChipList"></div>
+            <div class="expand-input-wrap">
+              <input class="expand-field-input" id="expandFieldInput" placeholder="Type a field name..." autocomplete="off" spellcheck="false">
+              <div class="field-dropdown" id="expandFieldDropdown" hidden></div>
+            </div>
+          </div>
+          <div class="expand-coachmark" id="expandCoachmark" hidden>
+            <div>New: expand just the fields you want, instead of everything.</div>
+            <button id="btnDismissCoachmark">Got it</button>
+          </div>
+        </div>
+        <button class="btn" id="btnCopy" title="Copy formatted JSON">Copy</button>
+        <button class="btn" id="btnDownload" title="Download as .json file">Download</button>
+        <button class="btn" id="btnSearch" title="Search (Ctrl/Cmd+F)">Search</button>
+      </div>
+
+      <div id="searchBar">
+        <div class="search-bar-row">
+          <input id="searchInput" placeholder="Search, or type in: to filter by field...">
+          <button class="btn icon" id="btnFieldHelper" title="Filter by field">▾</button>
+          <span id="searchCount"></span>
+          <button class="btn icon" id="searchPrev" title="Previous match">↑</button>
+          <button class="btn icon" id="searchNext" title="Next match">↓</button>
+          <button class="btn icon" id="btnSearchResultsToggle" title="Show all results">☰</button>
+          <button class="btn icon" id="searchClose" title="Close search">✕</button>
+          <div id="fieldDropdown" class="field-dropdown" hidden></div>
+        </div>
+        <div id="searchBreadcrumb" class="search-breadcrumb" hidden></div>
+        <div id="searchResultsList" class="search-results-list" hidden></div>
+      </div>
+    </div>
+    <div class="code-area">
+      <div class="line-numbers" id="outputLineNumbers" hidden>1</div>
+      <div class="output-content" id="outputContent">
+        <span class="placeholder">Formatted output will appear here.</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="comparePanels" class="layout-row" hidden>
+  <section class="panel compare-col" id="compareLeft">
+    <div class="panel-header">
+      <select class="select compare-session-select"></select>
+      <button class="btn icon compare-search-toggle" title="Search this side">🔍</button>
+    </div>
+    <div class="compare-search-bar" hidden>
+      <div class="compare-search-row">
+        <input class="compare-search-input" placeholder="Search this side...">
+        <span class="search-count"></span>
+        <button class="btn icon compare-search-prev" title="Previous match">↑</button>
+        <button class="btn icon compare-search-next" title="Next match">↓</button>
+      </div>
+      <div class="compare-search-breadcrumb" hidden></div>
+    </div>
+    <div class="code-area">
+      <div class="line-numbers compare-line-numbers"></div>
+      <div class="output-content compare-output"><span class="placeholder">Select a session above.</span></div>
+    </div>
+  </section>
+
+  <div class="divider" id="compareDivider"></div>
+
+  <section class="panel compare-col" id="compareRight">
+    <div class="panel-header">
+      <select class="select compare-session-select"></select>
+      <button class="btn icon compare-search-toggle" title="Search this side">🔍</button>
+    </div>
+    <div class="compare-search-bar" hidden>
+      <div class="compare-search-row">
+        <input class="compare-search-input" placeholder="Search this side...">
+        <span class="search-count"></span>
+        <button class="btn icon compare-search-prev" title="Previous match">↑</button>
+        <button class="btn icon compare-search-next" title="Next match">↓</button>
+      </div>
+      <div class="compare-search-breadcrumb" hidden></div>
+    </div>
+    <div class="code-area">
+      <div class="line-numbers compare-line-numbers"></div>
+      <div class="output-content compare-output"><span class="placeholder">Select a session above.</span></div>
+    </div>
+  </section>
+</div>
+</div>
+</div><!-- /appShell -->
+
+<footer id="siteFooter">
+  <span>&copy; <span id="year"></span> asariko</span>
+  <span class="sep">&middot;</span>
+  <a href="https://asariko.net/terms">Terms</a>
+  <span class="sep">&middot;</span>
+  <a href="https://asariko.net/privacy">Privacy</a>
+  <span class="sep">&middot;</span>
+  <span>Nothing you open here is ever sent anywhere.</span>
+</footer>
+
+<button id="matchJumpFloat" hidden>→ Jump to Source</button>
+
+<div id="toast"></div>
+
+<div id="infoModal" class="modal-overlay" hidden>
+  <div class="modal-box">
+    <div class="modal-header">
+      <span id="infoModalTitle"></span>
+      <button class="btn icon" id="infoModalClose" title="Close">✕</button>
+    </div>
+    <div class="modal-body" id="infoModalBody"></div>
+  </div>
+</div>
+
+<template id="tpl-guide">
+  <h3>Getting Started</h3>
+  <p>Paste JSON into the Source panel, drag &amp; drop a file onto it, or click Upload. Valid JSON is parsed automatically and shown in Tree view by default. The first time you do this, a short tip points out the <strong>⊞</strong> expand-options button &mdash; it only shows once.</p>
+
+  <h3>Layout</h3>
+  <p>Use the <strong>⬌</strong> button to switch between a side-by-side or stacked layout. Drag the divider between the two panels to resize them.</p>
+
+  <h3>View Modes</h3>
+  <ul>
+    <li><strong>String</strong> &mdash; plain formatted, syntax-highlighted JSON text with line numbers.</li>
+    <li><strong>Tree</strong> &mdash; an indented, expandable/collapsible tree. Click anywhere on a row to expand or collapse it.</li>
+    <li><strong>Preview</strong> &mdash; like Tree, but a collapsed row shows a live inline preview of its contents (similar to a browser console), instead of just a count.</li>
+    <li><strong>Collapsible</strong> &mdash; real JSON punctuation (braces, brackets, commas) with fold controls, so it reads like actual JSON you can still collapse.</li>
+  </ul>
+  <p>The <strong>⊞</strong> button in the output header opens Expand All / Collapse All, plus "Expand only these fields" &mdash; type a field name (autocomplete included) to add it as a chip, and only that field (and its ancestors) expand, leaving everything else collapsed. Add multiple fields to expand several at once; remove a chip to collapse that field again.</p>
+
+  <h3>Search</h3>
+  <p>Click Search or press Ctrl/Cmd+F. Type at least 3 characters to search keys and values (Tree/Preview/Collapsible only build DOM for what's expanded, so search works directly against your data and reveals matches on demand &mdash; it stays fast even on very large files).</p>
+  <p>Type <code>in:</code> followed by a field name to scope the search to one key &mdash; e.g. <code>surfside in:locationTitle</code>. An autocomplete list of field names appears as you type; the <strong>▾</strong> button next to the search box opens the full list. Leaving off the search text (just <code>in:locationTitle</code>) browses every value under that field. If the field holds a block (an object or array), the search text is matched inside every occurrence of that block instead &mdash; e.g. <code>in:operatingHours dinner</code>. This works the same way in String view, and in Compare mode.</p>
+  <p>Two more declarations, and all three can be combined:</p>
+  <ul>
+    <li><code>type:string</code> / <code>number</code> / <code>boolean</code> / <code>null</code> / <code>object</code> / <code>array</code> &mdash; only match values of that kind, e.g. <code>type:number</code> to avoid matching "20" inside an unrelated string.</li>
+    <li><code>has:fieldName</code> &mdash; an alias for <code>in:fieldName</code> with no search text: lists every object that has that field, regardless of its value.</li>
+  </ul>
+  <p>Matches found via a declaration (<code>in:</code>/<code>type:</code>/<code>has:</code>) highlight in violet instead of the usual yellow, so it's clear at a glance which part of a query found them.</p>
+  <p>The current match's exact path (e.g. <code>payload.venues[1].advisements[11].advisementID</code>) shows just below the search box. The <strong>☰</strong> button opens a scannable list of every match with its path and a short snippet &mdash; click any entry to jump straight to it, instead of stepping through with next/prev one at a time.</p>
+
+  <h3>Sessions</h3>
+  <p>Each file you work on gets its own session in the left panel, so switching between files doesn't lose your place. Uploading a new file while the current session already has content starts a fresh session named after that file; an empty session is reused instead of piling up clutter. Double-click a session's name to rename it, hover it to reveal a delete (✕) button, and use the ＋ button to start a blank session. The <strong>‹ Close</strong> button collapses the panel to a slim rail with just a <strong>›</strong> button to bring it back. Everything is stored in your browser only.</p>
+
+  <h3>Jump to Source</h3>
+  <p>Hover any row in Tree, Preview, or Collapsible view and a small <strong>→</strong> button appears -- click it to scroll the Source panel straight to that exact value (or that whole block, for an object/array) and select it, ready to type over. This is the fastest way to actually change something you found while browsing: find it visually, jump to it, edit the raw text directly.</p>
+
+  <h3>Compare Mode</h3>
+  <p>Click the <strong>⇄</strong> button to view two sessions side by side, each with its own search bar. This is a manual, eye-driven comparison &mdash; there's no automatic diff highlighting, so use each side's search to jump to the same field in both and check them yourself.</p>
+
+  <h3>Colors &amp; Theme</h3>
+  <p>The "Colors" dropdown picks a syntax color scheme for JSON values (including a pure Monochrome option). The moon button toggles light/dark for the interface itself.</p>
+</template>
+
+<template id="tpl-faq">
+  <h3>What do "in:", "type:", and "has:" do in the search box?</h3>
+  <p><code>in:</code> restricts matches to a specific field, e.g. <code>surfside in:locationTitle</code>. Leaving the text off browses every value of that field. If the field is a block (object/array) rather than a single value, your search text is matched inside that block instead.</p>
+  <p><code>type:</code> restricts matches to a specific JSON value kind (string/number/boolean/null/object/array) &mdash; useful for avoiding false positives like "20" matching inside an unrelated string when you only meant the number.</p>
+  <p><code>has:fieldName</code> is a more readable alias for <code>in:fieldName</code> with no search text. All three work together and in every view, including Compare mode.</p>
+
+  <h3>Is my data safe and private?</h3>
+  <p>Yes. Everything runs entirely in your browser &mdash; parsing, searching, formatting. Nothing you paste or upload is ever sent anywhere.</p>
+
+  <h3>Why does search need at least 3 characters?</h3>
+  <p>A 1&ndash;2 character query can match an enormous number of places in a large file, which is slow to highlight and not very useful anyway. Field-scoped search (<code>in:fieldName</code>) is exempt from this, since it's already narrowed to one key.</p>
+
+  <h3>Can I use this on large files?</h3>
+  <p>Yes. Tree, Preview, and Collapsible only build the part of the tree you actually have expanded, so opening a large file stays fast rather than rendering the entire structure up front. Search works directly against the underlying data (not the rendered DOM), so it also stays fast, and caps at 500 matches to avoid an overly broad query grinding things to a halt.</p>
+
+  <h3>Can I use this for sensitive data?</h3>
+  <p>Since nothing leaves your browser, yes. Sessions are kept in local storage though, which anything else running on the same page's origin could in principle read &mdash; if that matters for your data, clear the session when you're done.</p>
+
+  <h3>Can I work on more than one file at a time?</h3>
+  <p>Yes, using the Sessions panel on the left. Each session remembers its own source text and is stored in your browser's local storage, so it's still there after you reload the page or close the browser.</p>
+
+  <h3>What browsers are supported?</h3>
+  <p>Any modern browser &mdash; Chrome, Firefox, Safari, or Edge.</p>
+
+  <h3>Is this free?</h3>
+  <p>Yes, no ads, no account, no server component at all.</p>
+</template>
+
+<template id="tpl-changelog">
+  <div class="changelog-version">v1.12</div>
+  <div class="changelog-date">Latest</div>
+  <ul>
+    <li>Jump to Source: hover any row in Tree/Preview/Collapsible and click the small <strong>→</strong> box that appears next to it to scroll Source to and select that exact value or block.</li>
+    <li>While searching, the current match also gets its own floating <strong>→ Jump to Source</strong> button right above it (not covering the rest of the line), so you don't need to hover a row to jump straight to what you searched for.</li>
+  </ul>
+
+  <div class="changelog-version">v1.10</div>
+  <ul>
+    <li>Tree is now the default view when JSON loads, instead of String.</li>
+    <li>A one-time tip points out the expand-options (<strong>⊞</strong>) button the first time you load JSON, so it's easier to discover, it never shows again once dismissed or used.</li>
+  </ul>
+
+  <div class="changelog-version">v1.9</div>
+  <ul>
+    <li>The current search match now shows its exact path (e.g. <code>payload.venues[1].advisements[11].advisementID</code>) below the search box.</li>
+    <li>New <strong>☰</strong> button opens a scannable list of every match with its path and a short snippet &mdash; click any entry to jump straight to it, instead of only stepping through with next/prev.</li>
+  </ul>
+
+  <div class="changelog-version">v1.8</div>
+  <ul>
+    <li>Two new search declarations: <code>type:kind</code> (string/number/boolean/null/object/array) and <code>has:field</code> (an alias for <code>in:field</code> with no text).</li>
+    <li>Matches found via a declaration (<code>in:</code>/<code>type:</code>/<code>has:</code>) now highlight in a distinct violet color instead of the regular yellow, so it's clear which part of a query found them.</li>
+    <li>All declarations now work in Compare mode's search too &mdash; previously it only ever did a plain literal-text search, so <code>in:</code> there matched nothing.</li>
+    <li>Fixed the "Expand only these fields" popover closing itself the moment you picked a suggestion or removed a chip.</li>
+  </ul>
+
+  <div class="changelog-version">v1.7</div>
+  <ul>
+    <li>"Expand only these fields" &mdash; pick specific fields to expand (with autocomplete), leaving everything else collapsed, instead of only Expand All / Collapse All.</li>
+    <li>Fixed field-scoped search (<code>in:</code>) only working correctly in Tree/Preview/Collapsible &mdash; it now scopes correctly in String view too, instead of matching anywhere in the document.</li>
+    <li>Fixed keys and string values never actually getting their syntax color in String view (a color-coding bug, not just a missing feature &mdash; only punctuation and numbers were ever colored).</li>
+    <li>Sessions panel can now be closed from its own header, not just the toolbar toggle.</li>
+  </ul>
+
+  <div class="changelog-version">v1.6</div>
+  <ul>
+    <li>Compare mode &mdash; view two sessions side by side, each with its own independent search, to manually check two similar files against each other.</li>
+  </ul>
+
+  <div class="changelog-version">v1.5</div>
+  <ul>
+    <li>Sessions panel on the left &mdash; upload multiple files without losing earlier ones, rename, delete, and switch between them.</li>
+    <li>Added this Guide / FAQ / Changelog panel.</li>
+  </ul>
+
+  <div class="changelog-version">v1.4</div>
+  <ul>
+    <li>Field-scoped search: <code>in:fieldName</code> with autocomplete, block-scoped text search, and browse-all-values mode.</li>
+    <li>Line numbers in the Source input and String output view.</li>
+  </ul>
+
+  <div class="changelog-version">v1.3</div>
+  <ul>
+    <li>Fixed a major slowdown switching to Tree/Preview/Collapsible on large files &mdash; the tree now only builds DOM for expanded branches instead of the entire dataset up front.</li>
+    <li>Search rewritten to work against the underlying data directly, so it stays fast and still finds matches in collapsed branches.</li>
+    <li>Added a minimum search length and a match cap to keep broad queries from stalling the page.</li>
+  </ul>
+
+  <div class="changelog-version">v1.2</div>
+  <ul>
+    <li>Reworked the color theme to match our other tools' palette, with consistent hover states across all buttons.</li>
+    <li>Added multiple syntax color themes (Default, Vivid, Solarized, Pastel, Monochrome).</li>
+    <li>Moved Copy/Download/Search into the output panel, next to the view tabs.</li>
+  </ul>
+
+  <div class="changelog-version">v1.1</div>
+  <ul>
+    <li>Added Preview view &mdash; a devtools-style collapsed summary showing real content instead of just a count.</li>
+  </ul>
+
+  <div class="changelog-version">v1.0</div>
+  <ul>
+    <li>Initial release: String / Tree / Collapsible views, resizable side-by-side or stacked layout, upload/drag &amp; drop, copy, download, and search.</li>
+  </ul>
+</template>
+
+<script>
+(function(){
+  'use strict';
+
+  var el = {
+    sourceInput: document.getElementById('sourceInput'),
+    sourcePanel: document.getElementById('sourcePanel'),
+    sourceLineNumbers: document.getElementById('sourceLineNumbers'),
+    outputContent: document.getElementById('outputContent'),
+    outputLineNumbers: document.getElementById('outputLineNumbers'),
+    panels: document.getElementById('panels'),
+    divider: document.getElementById('divider'),
+    statusMsg: document.getElementById('statusMsg'),
+    statusMeta: document.getElementById('statusMeta'),
+    fileInput: document.getElementById('fileInput'),
+    viewTabs: document.getElementById('viewTabs'),
+    treeActions: document.getElementById('treeActions'),
+    searchBar: document.getElementById('searchBar'),
+    searchInput: document.getElementById('searchInput'),
+    searchCount: document.getElementById('searchCount'),
+    fieldDropdown: document.getElementById('fieldDropdown'),
+    toast: document.getElementById('toast'),
+    sidebar: document.getElementById('sidebar'),
+    sessionList: document.getElementById('sessionList')
+  };
+
+  var state = {
+    parsed: undefined,
+    parseError: null,
+    view: 'tree',
+    treeForce: null,        // null | 'expand' | 'collapse' -- 'collapse' also serves as the
+                            // baseline when customExpandFields is non-empty (see applyCustomExpand)
+    customExpandFields: [],
+    lastFileName: null,
+    searchQuery: '',
+    fieldNames: [],
+    marks: [],
+    markIndex: -1,
+    searchTruncated: false,
+    sessions: [],
+    activeSessionId: null
+  };
+
+  // ---------- persisted UI prefs ----------
+  function loadPref(key, fallback){
+    try { var v = localStorage.getItem('jsonviewer.' + key); return v === null ? fallback : v; }
+    catch(e){ return fallback; }
+  }
+  function savePref(key, value){
+    try { localStorage.setItem('jsonviewer.' + key, value); } catch(e){}
+  }
+
+  if (loadPref('theme', 'light') === 'dark') document.documentElement.setAttribute('data-theme','dark');
+  var savedSyntax = loadPref('syntax', 'default');
+  document.documentElement.setAttribute('data-syntax', savedSyntax);
+  document.getElementById('syntaxTheme').value = savedSyntax;
+  el.panels.className = loadPref('layout', 'row') === 'col' ? 'layout-col' : 'layout-row';
+
+  // ---------- sessions ----------
+  // Each uploaded/edited file lives in its own session (name + source text),
+  // persisted to localStorage so switching or reloading never loses earlier work.
+  function loadSessionsFromStorage(){
+    try {
+      var raw = localStorage.getItem('jsonviewer.sessions');
+      var parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch(e){ return []; }
+  }
+  function saveSessionsToStorage(){
+    try { localStorage.setItem('jsonviewer.sessions', JSON.stringify(state.sessions)); } catch(e){}
+  }
+  var sessionSeq = 0;
+  function makeSession(name, source){
+    sessionSeq++;
+    return { id: 'sess_' + Date.now() + '_' + sessionSeq, name: name, source: source || '' };
+  }
+  function nextUntitledName(){
+    var existing = state.sessions.map(function(s){ return s.name; });
+    if (existing.indexOf('Untitled') === -1) return 'Untitled';
+    var n = 2;
+    while (existing.indexOf('Untitled ' + n) !== -1) n++;
+    return 'Untitled ' + n;
+  }
+  function getActiveSession(){
+    for (var i = 0; i < state.sessions.length; i++){
+      if (state.sessions[i].id === state.activeSessionId) return state.sessions[i];
+    }
+    return null;
+  }
+  // Removes a session automatically if it's still blank -- so clicking + or
+  // switching away without typing anything doesn't leave clutter behind.
+  function cleanupIfEmpty(id){
+    var idx = -1;
+    for (var i = 0; i < state.sessions.length; i++){ if (state.sessions[i].id === id){ idx = i; break; } }
+    if (idx === -1) return;
+    if (state.sessions[idx].source.trim() === '' && state.sessions.length > 1) state.sessions.splice(idx, 1);
+  }
+
+  state.sessions = loadSessionsFromStorage();
+  if (!state.sessions.length) state.sessions.push(makeSession('Untitled', ''));
+  state.activeSessionId = loadPref('activeSession', null);
+  if (!getActiveSession()) state.activeSessionId = state.sessions[0].id;
+  el.sourceInput.value = getActiveSession().source;
+
+  function switchToSession(id){
+    if (id === state.activeSessionId) return;
+    cleanupIfEmpty(state.activeSessionId);
+    state.activeSessionId = id;
+    savePref('activeSession', id);
+    saveSessionsToStorage();
+    el.sourceInput.value = getActiveSession().source;
+    state.lastFileName = null;
+    parseNow();
+    renderSidebar();
+  }
+  function createNewSession(){
+    cleanupIfEmpty(state.activeSessionId);
+    var s = makeSession(nextUntitledName(), '');
+    state.sessions.push(s);
+    state.activeSessionId = s.id;
+    savePref('activeSession', s.id);
+    saveSessionsToStorage();
+    el.sourceInput.value = '';
+    state.lastFileName = null;
+    parseNow();
+    renderSidebar();
+    el.sourceInput.focus();
+  }
+  function deleteSession(id){
+    var idx = -1;
+    for (var i = 0; i < state.sessions.length; i++){ if (state.sessions[i].id === id){ idx = i; break; } }
+    if (idx === -1) return;
+    state.sessions.splice(idx, 1);
+    if (!state.sessions.length) state.sessions.push(makeSession('Untitled', ''));
+    if (state.activeSessionId === id){
+      state.activeSessionId = state.sessions[Math.max(0, idx - 1)].id;
+      savePref('activeSession', state.activeSessionId);
+      el.sourceInput.value = getActiveSession().source;
+      state.lastFileName = null;
+      parseNow();
+    }
+    saveSessionsToStorage();
+    renderSidebar();
+  }
+  function renameSession(id, newName){
+    var s = null;
+    for (var i = 0; i < state.sessions.length; i++){ if (state.sessions[i].id === id){ s = state.sessions[i]; break; } }
+    if (!s) return;
+    var trimmed = newName.trim();
+    if (trimmed) s.name = trimmed;
+    saveSessionsToStorage();
+    renderSidebar();
+  }
+
+  function renderSidebar(){
+    el.sessionList.innerHTML = '';
+    state.sessions.forEach(function(s){
+      var item = document.createElement('div');
+      item.className = 'session-item' + (s.id === state.activeSessionId ? ' active' : '');
+
+      var nameSpan = document.createElement('span');
+      nameSpan.className = 'session-name';
+      nameSpan.textContent = s.name;
+      nameSpan.title = s.name;
+      item.appendChild(nameSpan);
+
+      var delBtn = document.createElement('button');
+      delBtn.className = 'session-delete';
+      delBtn.textContent = '✕';
+      delBtn.title = 'Delete session';
+      item.appendChild(delBtn);
+
+      item.addEventListener('click', function(){ switchToSession(s.id); });
+      delBtn.addEventListener('click', function(e){ e.stopPropagation(); deleteSession(s.id); });
+      nameSpan.addEventListener('dblclick', function(e){
+        e.stopPropagation();
+        var input = document.createElement('input');
+        input.className = 'session-name-input';
+        input.value = s.name;
+        item.replaceChild(input, nameSpan);
+        input.focus();
+        input.select();
+        var done = false;
+        function commit(){
+          if (done) return;
+          done = true;
+          renameSession(s.id, input.value);
+        }
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', function(ev){
+          ev.stopPropagation();
+          if (ev.key === 'Enter'){ ev.preventDefault(); input.blur(); }
+          else if (ev.key === 'Escape'){ done = true; ev.preventDefault(); renderSidebar(); }
+        });
+        input.addEventListener('click', function(e2){ e2.stopPropagation(); });
+      });
+
+      el.sessionList.appendChild(item);
+    });
+  }
+
+  document.getElementById('btnNewSession').addEventListener('click', createNewSession);
+  var btnToggleSidebar = document.getElementById('btnToggleSidebar');
+  var sidebarToggleIcon = btnToggleSidebar.querySelector('.handle-icon');
+  function setSidebarCollapsed(collapsed){
+    el.sidebar.classList.toggle('collapsed', collapsed);
+    savePref('sidebarCollapsed', collapsed ? '1' : '0');
+    sidebarToggleIcon.textContent = collapsed ? '›' : '‹';
+    btnToggleSidebar.title = collapsed ? 'Open sessions panel' : 'Close sessions panel';
+  }
+  btnToggleSidebar.addEventListener('click', function(){
+    setSidebarCollapsed(!el.sidebar.classList.contains('collapsed'));
+  });
+  setSidebarCollapsed(loadPref('sidebarCollapsed', '0') === '1');
+
+  // ---------- info modal (Guide / FAQ / Changelog) ----------
+  var INFO_PAGE_TITLES = { guide: 'User Guide', faq: 'Frequently Asked Questions', changelog: 'Changelog' };
+  var infoModal = document.getElementById('infoModal');
+  var infoModalBody = document.getElementById('infoModalBody');
+  function openInfoModal(page){
+    var tpl = document.getElementById('tpl-' + page);
+    if (!tpl) return;
+    document.getElementById('infoModalTitle').textContent = INFO_PAGE_TITLES[page] || '';
+    infoModalBody.innerHTML = '';
+    infoModalBody.appendChild(tpl.content.cloneNode(true));
+    infoModal.hidden = false;
+  }
+  function closeInfoModal(){ infoModal.hidden = true; }
+  Array.prototype.forEach.call(document.querySelectorAll('.sidebar-link'), function(btn){
+    btn.addEventListener('click', function(){ openInfoModal(btn.getAttribute('data-page')); });
+  });
+  document.getElementById('infoModalClose').addEventListener('click', closeInfoModal);
+  infoModal.addEventListener('click', function(e){ if (e.target === infoModal) closeInfoModal(); });
+  document.addEventListener('keydown', function(e){
+    if (e.key === 'Escape' && !infoModal.hidden) closeInfoModal();
+  });
+
+  // ---------- helpers ----------
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function fmtBytes(n){
+    if (n < 1024) return n + ' B';
+    if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
+    return (n/1024/1024).toFixed(2) + ' MB';
+  }
+  function showToast(msg){
+    el.toast.textContent = msg;
+    el.toast.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(function(){ el.toast.classList.remove('show'); }, 1400);
+  }
+  function countNodes(v){
+    if (v === null || typeof v !== 'object') return 1;
+    var entries = Array.isArray(v) ? v : Object.values(v);
+    var n = 1;
+    for (var i=0;i<entries.length;i++) n += countNodes(entries[i]);
+    return n;
+  }
+
+  // building one "1\n2\n...\nN" text block is cheap even for huge files --
+  // it's a single text node, not N separate DOM elements.
+  function buildLineNumbers(count){
+    var lines = new Array(count);
+    for (var i = 0; i < count; i++) lines[i] = i + 1;
+    return lines.join('\n');
+  }
+
+  // ---------- parsing ----------
+  var parseTimer = null;
+  function scheduleParse(){
+    clearTimeout(parseTimer);
+    parseTimer = setTimeout(parseNow, 150);
+  }
+  function parseNow(){
+    var text = el.sourceInput.value;
+    var activeSession = getActiveSession();
+    if (activeSession && activeSession.source !== text){
+      activeSession.source = text;
+      saveSessionsToStorage();
+    }
+
+    var lineCount = text === '' ? 1 : (text.match(/\n/g) || []).length + 1;
+    el.sourceLineNumbers.textContent = buildLineNumbers(lineCount);
+
+    if (text.trim() === ''){
+      state.parsed = undefined;
+      state.parseError = null;
+      state.fieldNames = [];
+      updateStatus();
+      renderOutput();
+      return;
+    }
+    try {
+      state.parsed = JSON.parse(text);
+      state.parseError = null;
+      state.fieldNames = collectFieldNames(state.parsed);
+    } catch (err){
+      state.parsed = undefined;
+      state.parseError = err.message;
+      state.fieldNames = [];
+    }
+    updateStatus();
+    renderOutput();
+  }
+
+  var MAX_FIELD_NAMES = 300;
+  function collectFieldNames(root){
+    var set = new Set();
+    (function walk(value){
+      if (set.size >= MAX_FIELD_NAMES || value === null || typeof value !== 'object') return;
+      var entries = entriesOf(value);
+      for (var i = 0; i < entries.length && set.size < MAX_FIELD_NAMES; i++){
+        if (typeof entries[i][0] === 'string') set.add(entries[i][0]);
+        walk(entries[i][1]);
+      }
+    })(root);
+    return Array.from(set).sort();
+  }
+
+  function updateStatus(){
+    var text = el.sourceInput.value;
+    if (text.trim() === ''){
+      el.statusMsg.innerHTML = 'Paste JSON, drop a file, or click Upload to get started.';
+      el.statusMeta.textContent = '';
+      return;
+    }
+    if (state.parseError){
+      el.statusMsg.innerHTML = '<span class="status-error"><span class="dot"></span> Invalid JSON &mdash; ' + escapeHtml(state.parseError) + '</span>';
+      el.statusMeta.textContent = fmtBytes(new Blob([text]).size);
+    } else {
+      el.statusMsg.innerHTML = '<span class="status-ok"><span class="dot"></span> Valid JSON</span>';
+      var nodes = countNodes(state.parsed);
+      el.statusMeta.textContent = fmtBytes(new Blob([text]).size) + '  \u00b7  ' + nodes.toLocaleString() + ' nodes';
+    }
+  }
+
+  // ---------- syntax highlighted "string" view ----------
+  var TOKEN_RE = /("(?:\\u[0-9a-fA-F]{4}|\\.|[^"\\])*"(\s*:)?|\btrue\b|\bfalse\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|[{}\[\],:])/g;
+
+  function syntaxHighlight(jsonStr){
+    // tokenize the RAW text first, then escape only what's inside each match --
+    // escaping the whole string up front (as this used to) turns every literal
+    // `"` into `&quot;`, so TOKEN_RE's quote-delimited string alternative never
+    // matches anything and keys/string values silently never get colored.
+    return jsonStr.replace(TOKEN_RE, function(match){
+      var cls;
+      if (/^"/.test(match)) {
+        cls = /:$/.test(match) ? 'jv-key' : 'jv-string';
+      } else if (match === 'true' || match === 'false') {
+        cls = 'jv-bool';
+      } else if (match === 'null') {
+        cls = 'jv-null';
+      } else if (/^[{}\[\],:]$/.test(match)) {
+        cls = 'jv-punc';
+      } else {
+        cls = 'jv-number';
+      }
+      return '<span class="' + cls + '">' + escapeHtml(match) + '</span>';
+    });
+  }
+
+  function renderStringView(){
+    var pretty = JSON.stringify(state.parsed, null, 2);
+    var pre = document.createElement('pre');
+    pre.style.margin = '0';
+    pre.innerHTML = syntaxHighlight(pretty);
+    el.outputContent.innerHTML = '';
+    el.outputContent.appendChild(pre);
+
+    el.outputLineNumbers.textContent = buildLineNumbers(pretty.split('\n').length);
+    el.outputLineNumbers.hidden = false;
+  }
+
+  // ---------- shared tree / collapsible renderer ----------
+  var MAX_AUTO_EXPAND_DEPTH = 2;
+  var MAX_AUTO_EXPAND_ITEMS = 100;
+
+  function typeClass(v){
+    if (v === null) return 'jv-null';
+    switch (typeof v){
+      case 'string': return 'jv-string';
+      case 'number': return 'jv-number';
+      case 'boolean': return 'jv-bool';
+      default: return '';
+    }
+  }
+  function formatPrimitive(v){
+    if (v === null) return 'null';
+    if (typeof v === 'string') return JSON.stringify(v);
+    return String(v);
+  }
+
+  function shouldAutoExpand(depth, itemCount){
+    if (state.treeForce === 'expand') return true;
+    if (state.treeForce === 'collapse') return false;
+    return depth < MAX_AUTO_EXPAND_DEPTH && itemCount <= MAX_AUTO_EXPAND_ITEMS;
+  }
+
+  function entriesOf(value){
+    return Array.isArray(value) ? value.map(function(v,i){ return [i, v]; }) : Object.keys(value).map(function(k){ return [k, value[k]]; });
+  }
+
+  var PREVIEW_MAX_CHARS = 140;
+  function previewOne(v){
+    if (v === null) return 'null';
+    if (typeof v === 'object') return Array.isArray(v) ? '[…]' : '{…}';
+    return formatPrimitive(v);
+  }
+  function buildPreviewText(value, isArray, entries){
+    var parts = entries.map(function(pair){
+      return isArray ? previewOne(pair[1]) : (pair[0] + ': ' + previewOne(pair[1]));
+    });
+    var joined = parts.join(', ');
+    if (joined.length > PREVIEW_MAX_CHARS) joined = joined.slice(0, PREVIEW_MAX_CHARS) + '…';
+    return (isArray ? '[ ' : '{ ') + joined + (isArray ? ' ]' : ' }');
+  }
+
+  // mode: 'tree'        -> "key: {n keys}" generic summary
+  //       'preview'     -> same structure as tree, but collapsed summary shows real content (devtools-style)
+  //       'collapsible' -> real JSON punctuation with fold controls, no array index keys
+  function buildNode(key, value, depth, isLast, mode, path){
+    var wrap = document.createElement('div');
+    wrap.className = 'tv-node';
+    wrap._path = path;
+    var isContainer = value !== null && typeof value === 'object';
+    var keyLabel = key === null ? null : key;
+    var showKey = keyLabel !== null && (mode !== 'collapsible' || typeof key !== 'number');
+
+    var row = document.createElement('div');
+    row.className = 'tv-row';
+    wrap.appendChild(row);
+
+    if (!isContainer){
+      var spacer = document.createElement('span');
+      spacer.className = 'tv-toggle spacer';
+      spacer.textContent = '\u2022';
+      row.appendChild(spacer);
+
+      if (mode !== 'collapsible'){
+        if (showKey){
+          var kEl = document.createElement('span');
+          kEl.className = 'tv-key';
+          kEl.textContent = keyLabel + ': ';
+          row.appendChild(kEl);
+        }
+        var vEl = document.createElement('span');
+        vEl.className = typeClass(value);
+        vEl.textContent = formatPrimitive(value);
+        row.appendChild(vEl);
+      } else {
+        if (showKey){
+          var kEl2 = document.createElement('span');
+          kEl2.className = 'tv-key';
+          kEl2.textContent = JSON.stringify(String(keyLabel));
+          row.appendChild(kEl2);
+          var colon = document.createElement('span');
+          colon.className = 'tv-punc';
+          colon.textContent = ': ';
+          row.appendChild(colon);
+        }
+        var vEl2 = document.createElement('span');
+        vEl2.className = typeClass(value);
+        vEl2.textContent = formatPrimitive(value);
+        row.appendChild(vEl2);
+        if (!isLast){
+          var comma = document.createElement('span');
+          comma.className = 'tv-comma';
+          comma.textContent = ',';
+          row.appendChild(comma);
+        }
+      }
+      addSourceJumpButton(row, path);
+      return wrap;
+    }
+
+    var entries = entriesOf(value);
+    var count = entries.length;
+    var isArray = Array.isArray(value);
+    var expanded = shouldAutoExpand(depth, count);
+
+    var toggle = document.createElement('span');
+    toggle.className = 'tv-toggle';
+    toggle.textContent = expanded ? '\u25be' : '\u25b8';
+    row.appendChild(toggle);
+
+    if (mode !== 'collapsible'){
+      if (showKey){
+        var kEl3 = document.createElement('span');
+        kEl3.className = 'tv-key';
+        kEl3.textContent = keyLabel + ': ';
+        row.appendChild(kEl3);
+      }
+      var summary = document.createElement('span');
+      summary.className = 'tv-summary';
+      summary.textContent = mode === 'preview'
+        ? buildPreviewText(value, isArray, entries)
+        : (isArray ? '[ ' : '{ ') + count + (isArray ? (count===1?' item':' items') : (count===1?' key':' keys')) + (isArray ? ' ]' : ' }');
+      summary.style.display = expanded ? 'none' : 'inline';
+      row.appendChild(summary);
+    } else {
+      if (showKey){
+        var kEl4 = document.createElement('span');
+        kEl4.className = 'tv-key';
+        kEl4.textContent = JSON.stringify(String(keyLabel));
+        row.appendChild(kEl4);
+        var colon2 = document.createElement('span');
+        colon2.className = 'tv-punc';
+        colon2.textContent = ': ';
+        row.appendChild(colon2);
+      }
+      var openBrace = document.createElement('span');
+      openBrace.className = 'tv-punc';
+      openBrace.textContent = isArray ? '[' : '{';
+      row.appendChild(openBrace);
+
+      var foldSummary = document.createElement('span');
+      foldSummary.className = 'tv-summary';
+      foldSummary.textContent = ' \u2026 ' + count + (isArray ? (count===1?' item':' items') : (count===1?' key':' keys')) + ' ';
+      foldSummary.style.display = expanded ? 'none' : 'inline';
+      row.appendChild(foldSummary);
+
+      var closeInline = document.createElement('span');
+      closeInline.className = 'tv-punc';
+      closeInline.textContent = (isArray ? ']' : '}') + (isLast ? '' : ',');
+      closeInline.style.display = expanded ? 'none' : 'inline';
+      row.appendChild(closeInline);
+    }
+    addSourceJumpButton(row, path);
+
+    var children = document.createElement('div');
+    children.className = 'tv-children';
+    children.style.display = expanded ? 'block' : 'none';
+    wrap.appendChild(children);
+
+    // children are only actually built (recursing into buildNode) the first time
+    // this node is expanded -- for a collapsed branch we skip constructing its
+    // entire subtree, which is what makes switching to Tree/Preview/Collapsible
+    // on a large file fast regardless of total data size.
+    var childrenBuilt = false;
+    var childByKey = Object.create(null);
+    function buildChildrenNow(){
+      if (childrenBuilt) return;
+      childrenBuilt = true;
+      entries.forEach(function(pair, i){
+        var childWrap = buildNode(pair[0], pair[1], depth + 1, i === entries.length - 1, mode, path.concat(pair[0]));
+        childByKey[String(pair[0])] = childWrap;
+        children.appendChild(childWrap);
+      });
+    }
+    if (expanded) buildChildrenNow();
+
+    var closeRow;
+    if (mode === 'collapsible'){
+      closeRow = document.createElement('div');
+      closeRow.className = 'tv-row';
+      closeRow.style.display = expanded ? 'flex' : 'none';
+      var closeSpacer = document.createElement('span');
+      closeSpacer.className = 'tv-toggle spacer';
+      closeRow.appendChild(closeSpacer);
+      var closeBrace = document.createElement('span');
+      closeBrace.className = 'tv-punc';
+      closeBrace.textContent = (isArray ? ']' : '}') + (isLast ? '' : ',');
+      closeRow.appendChild(closeBrace);
+      wrap.appendChild(closeRow);
+    }
+
+    function setExpandedVisual(willExpand){
+      children.style.display = willExpand ? 'block' : 'none';
+      toggle.textContent = willExpand ? '\u25be' : '\u25b8';
+      if (mode !== 'collapsible'){
+        summary.style.display = willExpand ? 'none' : 'inline';
+      } else {
+        foldSummary.style.display = willExpand ? 'none' : 'inline';
+        closeInline.style.display = willExpand ? 'none' : 'inline';
+        if (closeRow) closeRow.style.display = willExpand ? 'flex' : 'none';
+      }
+    }
+
+    row.style.cursor = 'pointer';
+    row.addEventListener('click', function(){
+      var willExpand = children.style.display === 'none';
+      if (willExpand) buildChildrenNow();
+      setExpandedVisual(willExpand);
+    });
+
+    // exposed so search can lazily build+expand just the path to a match
+    // (see revealPath) without eagerly building the whole tree
+    wrap._expand = function(){
+      buildChildrenNow();
+      if (children.style.display === 'none') setExpandedVisual(true);
+    };
+    wrap._childByKey = childByKey;
+
+    return wrap;
+  }
+
+  // ---------- jump to Source ----------
+  // A small button on every row (leaf or container) that scrolls/selects the
+  // exact matching text in the Source panel -- so finding something in the
+  // tree gets you straight to editable raw text, without a separate edit mode.
+  function addSourceJumpButton(row, path){
+    var btn = document.createElement('button');
+    btn.className = 'tv-jump';
+    btn.textContent = '→';
+    btn.title = 'Jump to this in Source';
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      jumpToSource(path);
+    });
+    row.appendChild(btn);
+  }
+  function jumpToSource(path){
+    var range = locateValueRange(el.sourceInput.value, path);
+    if (!range){ showToast('Could not locate that in Source.'); return; }
+    el.sourceInput.focus();
+    el.sourceInput.setSelectionRange(range.start, range.end);
+    scrollTextareaToOffset(el.sourceInput, range.start);
+  }
+  function scrollTextareaToOffset(textarea, charIndex){
+    var before = textarea.value.slice(0, charIndex);
+    var lineIndex = (before.match(/\n/g) || []).length;
+    var lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 18;
+    var target = lineIndex * lineHeight - textarea.clientHeight / 2 + lineHeight;
+    textarea.scrollTop = Math.max(0, target);
+  }
+
+  var treeRootWrap = null;
+  function renderTreeLike(mode){
+    el.outputContent.innerHTML = '';
+    treeRootWrap = buildNode(null, state.parsed, 0, true, mode, []);
+    el.outputContent.appendChild(treeRootWrap);
+  }
+
+  // ---------- dispatch ----------
+  function renderOutput(){
+    el.treeActions.hidden = (state.view === 'string');
+    state.marks = [];
+    state.markIndex = -1;
+
+    if (state.parseError){
+      el.outputContent.innerHTML = '<div class="error-box">' + escapeHtml(state.parseError) + '</div>';
+      el.outputLineNumbers.hidden = true;
+      return;
+    }
+    if (state.parsed === undefined){
+      el.outputContent.innerHTML = '<span class="placeholder">Formatted output will appear here.</span>';
+      el.outputLineNumbers.hidden = true;
+      return;
+    }
+
+    if (state.view === 'string') renderStringView();
+    else {
+      renderTreeLike(state.view);
+      el.outputLineNumbers.hidden = true;
+      maybeShowExpandTip();
+    }
+
+    if (state.searchQuery){
+      var parsedSearch = parseSearchInput(state.searchQuery);
+      if (parsedSearch.declared || parsedSearch.text.length >= MIN_SEARCH_CHARS) applySearchHighlight(parsedSearch);
+    }
+  }
+
+  // ---------- view tabs ----------
+  el.viewTabs.addEventListener('click', function(e){
+    var btn = e.target.closest('.tab');
+    if (!btn) return;
+    Array.prototype.forEach.call(el.viewTabs.querySelectorAll('.tab'), function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    state.view = btn.getAttribute('data-view');
+    state.treeForce = null;
+    state.customExpandFields = [];
+    renderOutput();
+  });
+
+  // ---------- expand menu (Expand All / Collapse All / expand only these fields) ----------
+  var expandMenu = document.getElementById('expandMenu');
+  var expandFieldInput = document.getElementById('expandFieldInput');
+  var expandFieldDropdown = document.getElementById('expandFieldDropdown');
+  var expandChipList = document.getElementById('expandChipList');
+
+  function openExpandMenu(){ expandMenu.hidden = false; expandFieldInput.focus(); }
+  function closeExpandMenu(){ expandMenu.hidden = true; expandFieldDropdown.hidden = true; }
+
+  // One-time coachmark pointing at the expand menu, so new users discover it
+  // without it interrupting every load -- shown once (ever, via localStorage),
+  // and dismissed either explicitly or simply by using the button it points at.
+  var EXPAND_TIP_KEY = 'expandTipSeen';
+  function dismissExpandTip(){
+    savePref(EXPAND_TIP_KEY, '1');
+    document.getElementById('expandCoachmark').hidden = true;
+  }
+  function maybeShowExpandTip(){
+    if (loadPref(EXPAND_TIP_KEY, '0') === '1') return;
+    document.getElementById('expandCoachmark').hidden = false;
+  }
+  document.getElementById('btnDismissCoachmark').addEventListener('click', function(e){
+    e.stopPropagation();
+    dismissExpandTip();
+  });
+  document.getElementById('btnExpandMenu').addEventListener('click', function(){
+    dismissExpandTip();
+    expandMenu.hidden ? openExpandMenu() : closeExpandMenu();
+  });
+  document.addEventListener('click', function(e){
+    if (expandMenu.hidden) return;
+    // composedPath() is a snapshot of the event's path taken at dispatch time,
+    // unlike expandMenu.contains(e.target) -- picking a suggestion or removing
+    // a chip rebuilds that list (innerHTML = '') from inside its own click
+    // handler, detaching the clicked element before this listener runs, which
+    // made .contains() wrongly report "outside" and close the menu on every pick.
+    var path = e.composedPath ? e.composedPath() : [];
+    var insideMenu = path.indexOf(expandMenu) !== -1 || e.target.id === 'btnExpandMenu';
+    if (!insideMenu) closeExpandMenu();
+  });
+
+  document.getElementById('menuExpandAll').addEventListener('click', function(){
+    state.treeForce = 'expand';
+    state.customExpandFields = [];
+    renderOutput();
+    closeExpandMenu();
+  });
+  document.getElementById('menuCollapseAll').addEventListener('click', function(){
+    state.treeForce = 'collapse';
+    state.customExpandFields = [];
+    renderOutput();
+    closeExpandMenu();
+  });
+
+  // Renders the tree fully collapsed, then reveals and expands every occurrence
+  // of each chosen field name (wherever it appears, e.g. once per array item) --
+  // reuses the same lazy path-reveal machinery search uses, so this stays fast
+  // regardless of file size (nothing outside the chosen fields gets built).
+  function applyCustomExpand(){
+    if (!state.customExpandFields.length){
+      state.treeForce = null;
+      renderOutput();
+      return;
+    }
+    state.treeForce = 'collapse';
+    renderOutput();
+    if (!treeRootWrap) return;
+    state.customExpandFields.forEach(function(fieldName){
+      var paths = [];
+      findFieldScopedMatches(state.parsed, fieldName.toLowerCase(), '', null, [], paths, 2000);
+      paths.forEach(function(path){
+        var node = revealPath(path);
+        if (node && node._expand) node._expand();
+      });
+    });
+  }
+
+  function renderExpandChips(){
+    expandChipList.innerHTML = '';
+    state.customExpandFields.forEach(function(name){
+      var chip = document.createElement('span');
+      chip.className = 'expand-chip';
+      var label = document.createElement('span');
+      label.textContent = name;
+      chip.appendChild(label);
+      var removeBtn = document.createElement('button');
+      removeBtn.textContent = '✕';
+      removeBtn.title = 'Remove';
+      removeBtn.addEventListener('click', function(){
+        state.customExpandFields = state.customExpandFields.filter(function(n){ return n !== name; });
+        renderExpandChips();
+        applyCustomExpand();
+      });
+      chip.appendChild(removeBtn);
+      expandChipList.appendChild(chip);
+    });
+  }
+
+  function addExpandField(name){
+    if (!name) return;
+    var exists = state.customExpandFields.some(function(n){ return n.toLowerCase() === name.toLowerCase(); });
+    if (!exists) state.customExpandFields.push(name);
+    expandFieldInput.value = '';
+    expandFieldDropdown.hidden = true;
+    renderExpandChips();
+    applyCustomExpand();
+    expandFieldInput.focus();
+  }
+
+  var expandDropdownIndex = -1;
+  function updateExpandFieldDropdown(){
+    var partial = expandFieldInput.value.trim().toLowerCase();
+    var list = state.fieldNames;
+    if (partial) list = list.filter(function(f){ return f.toLowerCase().indexOf(partial) !== -1; });
+    list = list.slice(0, 20);
+
+    expandFieldDropdown.innerHTML = '';
+    if (!list.length){
+      var empty = document.createElement('div');
+      empty.className = 'field-dropdown-empty';
+      empty.textContent = state.fieldNames.length ? 'No matching fields' : 'No fields yet -- load some JSON first';
+      expandFieldDropdown.appendChild(empty);
+    } else {
+      list.forEach(function(name){
+        var item = document.createElement('div');
+        item.className = 'field-dropdown-item';
+        item.textContent = name;
+        item.addEventListener('click', function(){ addExpandField(name); });
+        expandFieldDropdown.appendChild(item);
+      });
+    }
+    expandDropdownIndex = -1;
+    expandFieldDropdown.hidden = false;
+  }
+  expandFieldInput.addEventListener('input', updateExpandFieldDropdown);
+  expandFieldInput.addEventListener('focus', updateExpandFieldDropdown);
+  expandFieldInput.addEventListener('keydown', function(e){
+    var items = expandFieldDropdown.querySelectorAll('.field-dropdown-item');
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+      if (!items.length) return;
+      e.preventDefault();
+      expandDropdownIndex = (expandDropdownIndex + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items.forEach(function(it, i){ it.classList.toggle('active', i === expandDropdownIndex); });
+      items[expandDropdownIndex].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter'){
+      e.preventDefault();
+      if (expandDropdownIndex >= 0 && items[expandDropdownIndex]){
+        addExpandField(items[expandDropdownIndex].textContent);
+      } else {
+        var typed = expandFieldInput.value.trim();
+        var canonical = state.fieldNames.filter(function(f){ return f.toLowerCase() === typed.toLowerCase(); })[0];
+        if (canonical) addExpandField(canonical);
+      }
+    } else if (e.key === 'Escape'){
+      e.preventDefault();
+      closeExpandMenu();
+    }
+  });
+
+  // ---------- source input ----------
+  el.sourceInput.addEventListener('input', scheduleParse);
+  el.sourceInput.addEventListener('scroll', function(){
+    el.sourceLineNumbers.scrollTop = el.sourceInput.scrollTop;
+  });
+  el.outputContent.addEventListener('scroll', function(){
+    el.outputLineNumbers.scrollTop = el.outputContent.scrollTop;
+    // reposition (not hide) -- the scrollIntoView() inside setCurrentMatch
+    // itself fires this same scroll event, so hiding here would immediately
+    // undo showing the float right after it appears
+    var m = state.marks[state.markIndex];
+    if (m) showMatchJumpFloat(m, pathForMark(m));
+    else hideMatchJumpFloat();
+  });
+
+  // ---------- upload / drag & drop ----------
+  function loadFile(file){
+    var reader = new FileReader();
+    reader.onload = function(e){
+      var content = e.target.result;
+      var baseName = file.name.replace(/\.[^.]+$/, '') || file.name;
+      var current = getActiveSession();
+
+      if (current && current.source.trim() !== ''){
+        // current session already has content -- don't clobber it, start a new one
+        var s = makeSession(baseName, content);
+        state.sessions.push(s);
+        state.activeSessionId = s.id;
+        savePref('activeSession', s.id);
+      } else if (current){
+        current.name = baseName;
+        current.source = content;
+      }
+
+      el.sourceInput.value = content;
+      state.lastFileName = file.name;
+      saveSessionsToStorage();
+      renderSidebar();
+      parseNow();
+    };
+    reader.onerror = function(){
+      showToast('Could not read that file.');
+    };
+    reader.readAsText(file);
+  }
+
+  document.getElementById('btnUpload').addEventListener('click', function(){ el.fileInput.click(); });
+  el.fileInput.addEventListener('change', function(e){
+    var f = e.target.files[0];
+    e.target.value = '';
+    if (f) loadFile(f);
+  });
+
+  ['dragover'].forEach(function(evt){
+    el.sourcePanel.addEventListener(evt, function(e){ e.preventDefault(); el.sourcePanel.classList.add('dragover'); });
+  });
+  ['dragleave','drop'].forEach(function(evt){
+    el.sourcePanel.addEventListener(evt, function(){ el.sourcePanel.classList.remove('dragover'); });
+  });
+  el.sourcePanel.addEventListener('drop', function(e){
+    e.preventDefault();
+    var f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) loadFile(f);
+  });
+
+  // ---------- clear ----------
+  document.getElementById('btnClear').addEventListener('click', function(){
+    el.sourceInput.value = '';
+    state.lastFileName = null;
+    state.searchQuery = '';
+    el.searchInput.value = '';
+    closeSearch();
+    parseNow();
+    el.sourceInput.focus();
+  });
+
+  // ---------- copy / download ----------
+  document.getElementById('btnCopy').addEventListener('click', function(){
+    if (state.parsed === undefined){ showToast('Nothing to copy.'); return; }
+    var text = JSON.stringify(state.parsed, null, 2);
+    navigator.clipboard.writeText(text).then(function(){
+      showToast('Copied to clipboard.');
+    }, function(){
+      showToast('Copy failed.');
+    });
+  });
+
+  document.getElementById('btnDownload').addEventListener('click', function(){
+    if (state.parsed === undefined){ showToast('Nothing to download.'); return; }
+    var text = JSON.stringify(state.parsed, null, 2);
+    var blob = new Blob([text], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    var activeSession = getActiveSession();
+    var baseName = state.lastFileName ? state.lastFileName.replace(/\.[^.]+$/, '')
+      : (activeSession && activeSession.name !== 'Untitled' ? activeSession.name : 'data');
+    a.download = baseName + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  });
+
+  // ---------- layout toggle ----------
+  document.getElementById('btnLayout').addEventListener('click', function(){
+    var isCol = el.panels.classList.contains('layout-col');
+    el.panels.className = isCol ? 'layout-row' : 'layout-col';
+    el.sourcePanel.style.flex = '';
+    document.getElementById('outputPanel').style.flex = '';
+    savePref('layout', isCol ? 'row' : 'col');
+  });
+
+  // ---------- syntax color theme ----------
+  document.getElementById('syntaxTheme').addEventListener('change', function(e){
+    document.documentElement.setAttribute('data-syntax', e.target.value);
+    savePref('syntax', e.target.value);
+  });
+
+  // ---------- theme toggle ----------
+  document.getElementById('btnTheme').addEventListener('click', function(){
+    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    if (dark) document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme','dark');
+    savePref('theme', dark ? 'light' : 'dark');
+  });
+
+  // ---------- divider drag ----------
+  function setupDivider(dividerEl, panelsEl, firstPanelEl, secondPanelEl){
+    var dragging = false;
+    dividerEl.addEventListener('pointerdown', function(e){
+      dragging = true;
+      dividerEl.classList.add('dragging');
+      dividerEl.setPointerCapture(e.pointerId);
+    });
+    dividerEl.addEventListener('pointermove', function(e){
+      if (!dragging) return;
+      var rect = panelsEl.getBoundingClientRect();
+      var isCol = panelsEl.classList.contains('layout-col');
+      var pct;
+      if (isCol) pct = (e.clientY - rect.top) / rect.height * 100;
+      else pct = (e.clientX - rect.left) / rect.width * 100;
+      pct = Math.max(15, Math.min(85, pct));
+      firstPanelEl.style.flex = '0 0 ' + pct + '%';
+      secondPanelEl.style.flex = '1 1 0';
+    });
+    function stop(e){
+      if (!dragging) return;
+      dragging = false;
+      dividerEl.classList.remove('dragging');
+      try { dividerEl.releasePointerCapture(e.pointerId); } catch(err){}
+    }
+    dividerEl.addEventListener('pointerup', stop);
+    dividerEl.addEventListener('pointercancel', stop);
+  }
+  setupDivider(el.divider, el.panels, el.sourcePanel, document.getElementById('outputPanel'));
+  setupDivider(
+    document.getElementById('compareDivider'),
+    document.getElementById('comparePanels'),
+    document.getElementById('compareLeft'),
+    document.getElementById('compareRight')
+  );
+
+  // ---------- compare mode ----------
+  // Read-only, side-by-side view of two sessions with independent search each --
+  // deliberately no automatic diffing (see TODO.md): the user compares by eye,
+  // search is just there to help them jump to the same term on both sides.
+  var compareState = {
+    active: false,
+    left: { marks: [], markIndex: -1, truncated: false },
+    right: { marks: [], markIndex: -1, truncated: false }
+  };
+
+  function compareCol(side){ return document.getElementById(side === 'left' ? 'compareLeft' : 'compareRight'); }
+
+  function populateCompareSelect(select){
+    var prev = select.value;
+    select.innerHTML = '';
+    state.sessions.forEach(function(s){
+      var opt = document.createElement('option');
+      opt.value = s.id;
+      opt.textContent = s.name;
+      select.appendChild(opt);
+    });
+    if (state.sessions.some(function(s){ return s.id === prev; })) select.value = prev;
+  }
+
+  function renderCompareColumn(side){
+    var col = compareCol(side);
+    var select = col.querySelector('.compare-session-select');
+    var outputEl = col.querySelector('.compare-output');
+    var lineNumsEl = col.querySelector('.compare-line-numbers');
+    var session = state.sessions.filter(function(s){ return s.id === select.value; })[0];
+
+    compareState[side].marks = [];
+    compareState[side].markIndex = -1;
+    compareState[side].parsed = undefined;
+
+    if (!session){
+      outputEl.innerHTML = '<span class="placeholder">No session to show.</span>';
+      lineNumsEl.textContent = '';
+      return;
+    }
+    var text = session.source;
+    if (text.trim() === ''){
+      outputEl.innerHTML = '<span class="placeholder">"' + escapeHtml(session.name) + '" is empty.</span>';
+      lineNumsEl.textContent = '';
+      return;
+    }
+    var parsedValue;
+    try {
+      parsedValue = JSON.parse(text);
+    } catch (err){
+      outputEl.innerHTML = '<div class="error-box">' + escapeHtml(err.message) + '</div>';
+      lineNumsEl.textContent = '';
+      return;
+    }
+    compareState[side].parsed = parsedValue;
+    var pretty = JSON.stringify(parsedValue, null, 2);
+    var pre = document.createElement('pre');
+    pre.style.margin = '0';
+    pre.innerHTML = syntaxHighlight(pretty);
+    outputEl.innerHTML = '';
+    outputEl.appendChild(pre);
+    lineNumsEl.textContent = buildLineNumbers(pretty.split('\n').length);
+
+    var q = col.querySelector('.compare-search-input').value.trim();
+    if (q) runCompareSearch(side);
+  }
+
+  // A standalone highlighter (separate from the main search's highlightTextIn)
+  // so compare mode can't accidentally interact with the main view's state.
+  function highlightPlain(root, q, marksArray, maxMatches, markClass){
+    markClass = markClass || 'jv-mark';
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    var textNodes = [];
+    var n;
+    while ((n = walker.nextNode())) textNodes.push(n);
+    for (var t = 0; t < textNodes.length; t++){
+      if (marksArray.length >= maxMatches) break;
+      var node = textNodes[t];
+      var text = node.nodeValue;
+      var lower = text.toLowerCase();
+      if (lower.indexOf(q) === -1) continue;
+      var frag = document.createDocumentFragment();
+      var last = 0, idx;
+      while ((idx = lower.indexOf(q, last)) !== -1){
+        if (marksArray.length >= maxMatches) break;
+        if (idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
+        var mark = document.createElement('mark');
+        mark.className = markClass;
+        mark.textContent = text.slice(idx, idx + q.length);
+        frag.appendChild(mark);
+        marksArray.push(mark);
+        last = idx + q.length;
+      }
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    }
+  }
+
+  function setCompareCurrentMatch(side){
+    var cs = compareState[side];
+    var col = compareCol(side);
+    var countEl = col.querySelector('.search-count');
+    var bc = col.querySelector('.compare-search-breadcrumb');
+    cs.marks.forEach(function(m){ m.classList.remove('jv-current'); });
+    var m = cs.marks[cs.markIndex];
+    if (!m) return;
+    m.classList.add('jv-current');
+    m.scrollIntoView({ block: 'center' });
+    countEl.textContent = (cs.markIndex + 1) + ' / ' + cs.marks.length + (cs.truncated ? '+' : '');
+    var path = pathForMark(m);
+    if (path){ bc.textContent = formatBreadcrumb(path); bc.hidden = false; }
+    else bc.hidden = true;
+  }
+  function navigateCompareMatch(side, dir){
+    var cs = compareState[side];
+    if (!cs.marks.length) return;
+    cs.markIndex = (cs.markIndex + dir + cs.marks.length) % cs.marks.length;
+    setCompareCurrentMatch(side);
+  }
+  // Mirrors applySearchHighlight's declaration handling exactly (in:/type:/has:,
+  // plus the declared-match color) -- compare columns are read-only pretty-printed
+  // text, the same shape as String view, so the same text-based functions apply.
+  function runCompareSearch(side){
+    var cs = compareState[side];
+    var col = compareCol(side);
+    var input = col.querySelector('.compare-search-input');
+    var outputEl = col.querySelector('.compare-output');
+    var countEl = col.querySelector('.search-count');
+    var parsed = parseSearchInput(input.value);
+    var q = parsed.text.toLowerCase();
+    var fieldLower = parsed.field;
+    var typeFilter = parsed.type;
+    var markClass = parsed.declared ? 'jv-mark-declared' : 'jv-mark';
+
+    cs.marks.forEach(function(m){ if (m.parentNode) m.parentNode.replaceChild(document.createTextNode(m.textContent), m); });
+    outputEl.normalize();
+    cs.marks = [];
+    cs.markIndex = -1;
+    cs.truncated = false;
+    var bcEl = col.querySelector('.compare-search-breadcrumb');
+    bcEl.hidden = true;
+
+    if (!q && !parsed.declared){ countEl.textContent = ''; return; }
+
+    var truncatedRef = { value: false };
+    var pre = outputEl.querySelector('pre');
+    if (fieldLower){
+      var fieldPaths = [];
+      if (cs.parsed !== undefined) collectFieldOccurrencePaths(cs.parsed, fieldLower.toLowerCase(), [], fieldPaths);
+      cs.marks = highlightFieldScopedInText(pre, fieldLower, q, typeFilter, truncatedRef, markClass, fieldPaths);
+    } else if (typeFilter){
+      var typedPaths = [];
+      if (cs.parsed !== undefined) collectTypedValuePaths(cs.parsed, typeFilter, [], typedPaths);
+      cs.marks = highlightTypedTextIn(outputEl, typeFilter, q, truncatedRef, markClass, typedPaths);
+    } else {
+      highlightPlain(outputEl, q, cs.marks, MAX_SEARCH_MATCHES, markClass);
+    }
+    cs.truncated = truncatedRef.value || cs.marks.length >= MAX_SEARCH_MATCHES;
+
+    if (cs.marks.length){ cs.markIndex = 0; setCompareCurrentMatch(side); }
+    else countEl.textContent = 'No matches';
+  }
+
+  function setupCompareColumn(side){
+    var col = compareCol(side);
+    var select = col.querySelector('.compare-session-select');
+    var searchToggleBtn = col.querySelector('.compare-search-toggle');
+    var searchBar = col.querySelector('.compare-search-bar');
+    var searchInput = col.querySelector('.compare-search-input');
+    var timer = null;
+
+    select.addEventListener('change', function(){
+      savePref('compareSession_' + side, select.value);
+      renderCompareColumn(side);
+    });
+    searchToggleBtn.addEventListener('click', function(){
+      searchBar.hidden = !searchBar.hidden;
+      if (!searchBar.hidden) searchInput.focus();
+    });
+    searchInput.addEventListener('input', function(){
+      clearTimeout(timer);
+      timer = setTimeout(function(){ runCompareSearch(side); }, 120);
+    });
+    searchInput.addEventListener('keydown', function(e){
+      if (e.key === 'Enter'){ e.preventDefault(); navigateCompareMatch(side, e.shiftKey ? -1 : 1); }
+    });
+    col.querySelector('.compare-search-next').addEventListener('click', function(){ navigateCompareMatch(side, 1); });
+    col.querySelector('.compare-search-prev').addEventListener('click', function(){ navigateCompareMatch(side, -1); });
+  }
+  setupCompareColumn('left');
+  setupCompareColumn('right');
+
+  document.getElementById('btnCompare').addEventListener('click', function(){
+    compareState.active = !compareState.active;
+    el.panels.hidden = compareState.active;
+    document.getElementById('comparePanels').hidden = !compareState.active;
+    document.getElementById('statusBar').hidden = compareState.active;
+    document.getElementById('btnCompare').classList.toggle('active', compareState.active);
+    if (!compareState.active) return;
+
+    var leftSelect = compareCol('left').querySelector('.compare-session-select');
+    var rightSelect = compareCol('right').querySelector('.compare-session-select');
+    populateCompareSelect(leftSelect);
+    populateCompareSelect(rightSelect);
+
+    var leftId = loadPref('compareSession_left', null);
+    if (!state.sessions.some(function(s){ return s.id === leftId; })) leftId = state.activeSessionId;
+    var rightId = loadPref('compareSession_right', null);
+    if (!rightId || rightId === leftId || !state.sessions.some(function(s){ return s.id === rightId; })){
+      var other = state.sessions.filter(function(s){ return s.id !== leftId; })[0];
+      rightId = other ? other.id : leftId;
+    }
+    leftSelect.value = leftId;
+    rightSelect.value = rightId;
+    renderCompareColumn('left');
+    renderCompareColumn('right');
+  });
+
+  // ---------- search ----------
+  // Declaration parsing: "in:field", "type:kind", "has:field" can all appear
+  // anywhere in the box, in any combination. DANGLING_QUALIFIER_RE detects one
+  // still being typed at the very end of the input (no trailing space yet),
+  // which is what drives the autocomplete dropdown instead of the actual filter.
+  var TYPE_NAMES = ['string', 'number', 'boolean', 'null', 'object', 'array'];
+  var DANGLING_QUALIFIER_RE = /(?:^|\s)(in|type|has):(\S*)$/i;
+
+  function extractQualifier(text, name){
+    var re = new RegExp('(?:^|\\s)' + name + ':(\\S+)', 'i');
+    var m = text.match(re);
+    if (!m) return { value: null, text: text };
+    return { value: m[1], text: (text.slice(0, m.index) + text.slice(m.index + m[0].length)) };
+  }
+  // has: is an alias for in: (see the Guide) -- both resolve to the same
+  // exact-key-match logic, so "has:advisements" only wins over "in:" if in:
+  // wasn't already given.
+  function parseSearchInput(raw){
+    var text = raw;
+    var r = extractQualifier(text, 'in'); var field = r.value; text = r.text;
+    r = extractQualifier(text, 'type'); var type = r.value ? r.value.toLowerCase() : null; text = r.text;
+    r = extractQualifier(text, 'has'); var has = r.value; text = r.text;
+    if (!field) field = has;
+    return { field: field, type: type, text: text.trim(), declared: !!(field || type) };
+  }
+  function danglingQualifierToken(raw){
+    var m = raw.match(DANGLING_QUALIFIER_RE);
+    return m ? { kind: m[1].toLowerCase(), partial: m[2] } : null;
+  }
+
+  var fieldDropdownIndex = -1;
+  function updateFieldDropdown(){
+    var dangling = danglingQualifierToken(el.searchInput.value);
+    if (!dangling){ closeFieldDropdown(); return; }
+    var kind = dangling.kind;
+    var source = kind === 'type' ? TYPE_NAMES : state.fieldNames;
+    var list = source;
+    if (dangling.partial){
+      var pl = dangling.partial.toLowerCase();
+      list = list.filter(function(f){ return f.toLowerCase().indexOf(pl) !== -1; });
+    }
+    list = list.slice(0, 20);
+
+    el.fieldDropdown.innerHTML = '';
+    if (!list.length){
+      var empty = document.createElement('div');
+      empty.className = 'field-dropdown-empty';
+      empty.textContent = kind !== 'type' && !state.fieldNames.length ? 'No fields yet -- load some JSON first' : 'No matches';
+      el.fieldDropdown.appendChild(empty);
+    } else {
+      list.forEach(function(name){
+        var item = document.createElement('div');
+        item.className = 'field-dropdown-item';
+        item.textContent = name;
+        item.dataset.name = name;
+        item.addEventListener('click', function(){ chooseQualifierValue(kind, name); });
+        el.fieldDropdown.appendChild(item);
+      });
+    }
+    fieldDropdownIndex = -1;
+    el.fieldDropdown.hidden = false;
+  }
+  function closeFieldDropdown(){
+    el.fieldDropdown.hidden = true;
+    fieldDropdownIndex = -1;
+  }
+  function moveFieldDropdownSelection(dir){
+    var items = el.fieldDropdown.querySelectorAll('.field-dropdown-item');
+    if (!items.length) return;
+    fieldDropdownIndex = (fieldDropdownIndex + dir + items.length) % items.length;
+    items.forEach(function(it, i){ it.classList.toggle('active', i === fieldDropdownIndex); });
+    items[fieldDropdownIndex].scrollIntoView({ block: 'nearest' });
+  }
+  function chooseQualifierValue(kind, value){
+    var raw = el.searchInput.value;
+    var m = raw.match(DANGLING_QUALIFIER_RE);
+    var prefix = m ? raw.slice(0, m.index).trim() : raw.trim();
+    el.searchInput.value = (prefix ? prefix + ' ' : '') + kind + ':' + value + ' ';
+    closeFieldDropdown();
+    el.searchInput.focus();
+    el.searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  document.getElementById('btnFieldHelper').addEventListener('click', function(){
+    var raw = el.searchInput.value;
+    if (!danglingQualifierToken(raw)){
+      el.searchInput.value = (raw.trim() ? raw.trim() + ' ' : '') + 'in:';
+    }
+    el.searchInput.focus();
+    updateFieldDropdown();
+  });
+  document.addEventListener('click', function(e){
+    if (!el.fieldDropdown.hidden && !el.searchBar.contains(e.target)) closeFieldDropdown();
+  });
+
+  function isSearchOpen(){ return el.searchBar.classList.contains('open'); }
+  function openSearch(){
+    el.searchBar.classList.add('open');
+    el.searchInput.focus();
+    el.searchInput.select();
+  }
+  function closeSearch(){
+    el.searchBar.classList.remove('open');
+    state.searchQuery = '';
+    clearSearchMarks();
+    el.searchCount.textContent = '';
+    document.getElementById('searchBreadcrumb').hidden = true;
+    closeFieldDropdown();
+    setSearchResultsListOpen(false);
+    hideMatchJumpFloat();
+  }
+  document.getElementById('btnSearch').addEventListener('click', function(){
+    isSearchOpen() ? closeSearch() : openSearch();
+  });
+  document.getElementById('searchClose').addEventListener('click', closeSearch);
+
+  document.addEventListener('keydown', function(e){
+    var mod = e.metaKey || e.ctrlKey;
+    var inSearchInput = isSearchOpen() && document.activeElement === el.searchInput;
+    var dropdownOpen = inSearchInput && !el.fieldDropdown.hidden;
+
+    if (mod && (e.key === 'f' || e.key === 'F')){
+      e.preventDefault();
+      openSearch();
+    } else if (e.key === 'Escape' && isSearchOpen()){
+      if (dropdownOpen) closeFieldDropdown();
+      else closeSearch();
+    } else if (dropdownOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')){
+      e.preventDefault();
+      moveFieldDropdownSelection(e.key === 'ArrowDown' ? 1 : -1);
+    } else if (dropdownOpen && e.key === 'Enter' && fieldDropdownIndex >= 0){
+      e.preventDefault();
+      var items = el.fieldDropdown.querySelectorAll('.field-dropdown-item');
+      var item = items[fieldDropdownIndex];
+      if (item) chooseField(item.dataset.name);
+    } else if (inSearchInput && e.key === 'Enter'){
+      e.preventDefault();
+      navigateMatch(e.shiftKey ? -1 : 1);
+    }
+  });
+
+  // search only re-highlights marks on the already-rendered output --
+  // it must NOT trigger a full data-to-DOM rebuild on every keystroke,
+  // or typing in the search box gets laggy on any non-trivial JSON.
+  function clearSearchMarks(){
+    state.marks.forEach(function(mark){
+      if (mark.tagName === 'MARK'){
+        if (mark.parentNode) mark.parentNode.replaceChild(document.createTextNode(mark.textContent), mark);
+      } else {
+        mark.classList.remove('jv-mark', 'jv-mark-declared', 'jv-current');
+      }
+    });
+    state.marks = [];
+    state.markIndex = -1;
+    el.outputContent.normalize();
+  }
+
+  var MIN_SEARCH_CHARS = 3;
+  var searchTimer = null;
+  el.searchInput.addEventListener('input', function(){
+    updateFieldDropdown();
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(function(){
+      state.searchQuery = el.searchInput.value;
+      clearSearchMarks();
+      var parsed = parseSearchInput(state.searchQuery);
+      if (!parsed.declared && !parsed.text){
+        el.searchCount.textContent = '';
+        document.getElementById('searchBreadcrumb').hidden = true;
+        renderSearchResultsList();
+      } else if (!parsed.declared && parsed.text.length < MIN_SEARCH_CHARS){
+        el.searchCount.textContent = 'Type ' + MIN_SEARCH_CHARS + '+ characters';
+        document.getElementById('searchBreadcrumb').hidden = true;
+        renderSearchResultsList();
+      } else {
+        applySearchHighlight(parsed);
+      }
+    }, 100);
+  });
+
+  document.getElementById('searchNext').addEventListener('click', function(){ navigateMatch(1); });
+  document.getElementById('searchPrev').addEventListener('click', function(){ navigateMatch(-1); });
+
+  // Renders a path array as a dotted/bracket breadcrumb, e.g.
+  // payload.venues[1].advisements[11].advisementID
+  function formatBreadcrumb(path){
+    if (!path || !path.length) return '(root)';
+    var out = '';
+    path.forEach(function(seg){
+      if (typeof seg === 'number') out += '[' + seg + ']';
+      else out += (out ? '.' : '') + seg;
+    });
+    return out;
+  }
+  // Tree/Preview/Collapsible marks get their path for free (every built node
+  // is tagged in buildNode) via the nearest enclosing .tv-node, which is exact
+  // down to the specific leaf. String view/Compare mode marks carry their own
+  // ._path directly (see highlightFieldScopedInText/highlightTypedTextIn),
+  // precise to the matched field but not to a nested leaf inside a block match.
+  function pathForMark(mark){
+    if (mark._path) return mark._path;
+    var node = mark.closest ? mark.closest('.tv-node') : null;
+    return node ? node._path : null;
+  }
+
+  var MAX_SEARCH_MATCHES = 500;
+
+  // type:kind support. Only the 6 JSON value kinds are meaningful here -- an
+  // unrecognized kind name is treated as "don't filter" rather than matching nothing.
+  function valueMatchesType(value, typeName){
+    switch (typeName){
+      case 'null': return value === null;
+      case 'array': return Array.isArray(value);
+      case 'object': return value !== null && typeof value === 'object' && !Array.isArray(value);
+      case 'string': case 'number': case 'boolean': return typeof value === typeName;
+      default: return true;
+    }
+  }
+
+  // Unconditional path enumerators (no q/type filtering baked in beyond the
+  // field/type they're named for) -- used only to build a breadcrumb path per
+  // match in String view/Compare mode. They exist so the resulting path list
+  // aligns 1:1 by plain array index with findFieldOccurrencesInText's /
+  // highlightTypedTextIn's own occurrence order, which also doesn't filter by
+  // q -- trying to zip against the q-filtered matchers above is what would make
+  // this fragile (an occurrence can produce zero, one, or several ranges).
+  function collectFieldOccurrencePaths(value, fieldLower, path, results){
+    if (value === null || typeof value !== 'object') return;
+    var entries = entriesOf(value);
+    for (var i = 0; i < entries.length; i++){
+      var k = entries[i][0], v = entries[i][1];
+      if (typeof k === 'string' && k.toLowerCase() === fieldLower) results.push(path.concat(k));
+      if (v !== null && typeof v === 'object') collectFieldOccurrencePaths(v, fieldLower, path.concat(k), results);
+    }
+  }
+  function collectTypedValuePaths(value, typeFilter, path, results){
+    if (value !== null && typeof value === 'object'){
+      var entries = entriesOf(value);
+      for (var i = 0; i < entries.length; i++){
+        collectTypedValuePaths(entries[i][1], typeFilter, path.concat(entries[i][0]), results);
+      }
+    } else if (valueMatchesType(value, typeFilter)){
+      results.push(path.slice());
+    }
+  }
+
+  // Walks the parsed DATA (not the DOM) to find paths containing the query --
+  // this is what lets search stay fast on a large file even though Tree/Preview/
+  // Collapsible now only build DOM for expanded branches: we never need to
+  // build the whole tree just to search it, we search the plain JS object
+  // (cheap) and then lazily build+expand only the specific paths that matched.
+  // typeFilter (from type:kind) is only checked against actual values -- a key
+  // name substring match is skipped entirely when it's set, since a key name
+  // isn't itself a typed value.
+  function collectMatchingPaths(value, q, typeFilter, path, results, limit){
+    if (results.length >= limit) return;
+    if (value !== null && typeof value === 'object'){
+      var entries = entriesOf(value);
+      for (var i = 0; i < entries.length && results.length < limit; i++){
+        var k = entries[i][0], v = entries[i][1];
+        if (!typeFilter && typeof k === 'string' && k.toLowerCase().indexOf(q) !== -1) results.push(path.concat(k));
+        collectMatchingPaths(v, q, typeFilter, path.concat(k), results, limit);
+      }
+    } else if ((!typeFilter || valueMatchesType(value, typeFilter)) && formatPrimitive(value).toLowerCase().indexOf(q) !== -1){
+      results.push(path.slice());
+    }
+  }
+
+  function revealPath(path){
+    var node = treeRootWrap;
+    for (var i = 0; i < path.length && node && node._expand; i++){
+      node._expand();
+      node = node._childByKey[String(path[i])];
+    }
+    return node || null;
+  }
+
+  // "in:fieldName text" support -- finds every key exactly matching fieldLower,
+  // anywhere in the tree (there may be many, e.g. one per array item). If that
+  // key's value is a scalar, it's a match when it contains textQ (or always,
+  // when textQ is empty -- "browse every value of this field"). If it's a
+  // block (object/array), textQ is searched *inside* that whole block instead --
+  // this is what makes "in:operatingHours dinner" search within every
+  // operatingHours block specifically, rather than the whole document.
+  function findFieldScopedMatches(value, fieldLower, textQ, typeFilter, path, results, limit){
+    if (results.length >= limit || value === null || typeof value !== 'object') return;
+    var entries = entriesOf(value);
+    for (var i = 0; i < entries.length && results.length < limit; i++){
+      var k = entries[i][0], v = entries[i][1];
+      if (typeof k === 'string' && k.toLowerCase() === fieldLower && (!typeFilter || valueMatchesType(v, typeFilter))){
+        if (v === null || typeof v !== 'object'){
+          if (formatPrimitive(v).toLowerCase().indexOf(textQ) !== -1) results.push(path.concat(k));
+        } else if (textQ === ''){
+          results.push(path.concat(k));
+        } else {
+          collectMatchingPaths(v, textQ, null, path.concat(k), results, limit);
+        }
+      }
+      if (v !== null && typeof v === 'object'){
+        findFieldScopedMatches(v, fieldLower, textQ, typeFilter, path.concat(k), results, limit);
+      }
+    }
+  }
+
+  // Wraps every occurrence of q found under `root` in a <mark>, appending to
+  // state.marks. Scoping `root` to a single revealed node (rather than always
+  // scanning the whole output) is what keeps a field-scoped search from also
+  // lighting up unrelated text elsewhere that happens to contain the same substring.
+  function highlightTextIn(root, q, truncatedRef, markClass){
+    markClass = markClass || 'jv-mark';
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    var textNodes = [];
+    var n;
+    while ((n = walker.nextNode())) textNodes.push(n);
+
+    for (var t = 0; t < textNodes.length; t++){
+      if (truncatedRef.value) return;
+      var node = textNodes[t];
+      var text = node.nodeValue;
+      var lower = text.toLowerCase();
+      if (lower.indexOf(q) === -1) continue;
+
+      var frag = document.createDocumentFragment();
+      var last = 0, idx;
+      while ((idx = lower.indexOf(q, last)) !== -1){
+        if (state.marks.length >= MAX_SEARCH_MATCHES){ truncatedRef.value = true; break; }
+        if (idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
+        var mark = document.createElement('mark');
+        mark.className = markClass;
+        mark.textContent = text.slice(idx, idx + q.length);
+        frag.appendChild(mark);
+        state.marks.push(mark);
+        last = idx + q.length;
+      }
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    }
+  }
+
+  function escapeRegExp(s){ return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+
+  // Finds where the JSON value starting at `pos` (its first character -- a
+  // quote, brace, bracket, digit/minus, or the start of true/false/null) ends.
+  // Needed so String view's field-scoped search can bound a match to just one
+  // field's value/block without re-parsing the whole document into a tree.
+  function findJsonValueEnd(text, pos){
+    var c = text[pos];
+    if (c === '"'){
+      pos++;
+      while (pos < text.length){
+        if (text[pos] === '\\'){ pos += 2; continue; }
+        if (text[pos] === '"'){ pos++; break; }
+        pos++;
+      }
+      return pos;
+    }
+    if (c === '{' || c === '['){
+      var open = c, close = c === '{' ? '}' : ']';
+      var depth = 1;
+      pos++;
+      while (pos < text.length && depth > 0){
+        var ch = text[pos];
+        if (ch === '"'){
+          pos++;
+          while (pos < text.length){
+            if (text[pos] === '\\'){ pos += 2; continue; }
+            if (text[pos] === '"'){ pos++; break; }
+            pos++;
+          }
+          continue;
+        }
+        if (ch === open) depth++;
+        else if (ch === close) depth--;
+        pos++;
+      }
+      return pos;
+    }
+    var m = /^(?:true|false|null|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/.exec(text.slice(pos));
+    return pos + (m ? m[0].length : 0);
+  }
+
+  // Path -> raw-text [start,end) resolver, used by "jump to Source". Works on
+  // whatever formatting the user's actual Source text has (minified or not --
+  // it just tracks brackets/quotes, not indentation), unlike the pretty-text
+  // assumptions elsewhere, since this walks the literal Source panel contents.
+  function skipWs(text, pos){
+    while (pos < text.length && /\s/.test(text[pos])) pos++;
+    return pos;
+  }
+  function findChildValueRange(text, containerStart, key){
+    var isArray = text[containerStart] === '[';
+    var pos = containerStart + 1;
+    var idx = 0;
+    while (true){
+      pos = skipWs(text, pos);
+      if (pos >= text.length || text[pos] === (isArray ? ']' : '}')) return null;
+      var thisKey;
+      if (!isArray){
+        var keyEnd = findJsonValueEnd(text, pos);
+        try { thisKey = JSON.parse(text.slice(pos, keyEnd)); } catch (err){ return null; }
+        pos = skipWs(text, keyEnd);
+        if (text[pos] !== ':') return null;
+        pos = skipWs(text, pos + 1);
+      } else {
+        thisKey = idx;
+      }
+      var valStart = pos;
+      var valEnd = findJsonValueEnd(text, pos);
+      if (String(thisKey) === String(key)) return { start: valStart, end: valEnd };
+      pos = skipWs(text, valEnd);
+      if (text[pos] === ','){ pos++; idx++; } else return null;
+    }
+  }
+  function locateValueRange(text, path){
+    var pos = skipWs(text, 0);
+    var range = { start: pos, end: findJsonValueEnd(text, pos) };
+    for (var i = 0; i < path.length; i++){
+      var found = findChildValueRange(text, range.start, path[i]);
+      if (!found) return null;
+      range = found;
+    }
+    return range;
+  }
+
+  // Every occurrence of "fieldName": in the pretty text, each paired with its
+  // value's [start,end) span -- computed straight from the rendered text, so
+  // it needs no tree/path machinery and stays correct regardless of view.
+  function findFieldOccurrencesInText(text, fieldName){
+    var re = new RegExp('"' + escapeRegExp(fieldName) + '"\\s*:\\s*', 'gi');
+    var occurrences = [];
+    var m;
+    while ((m = re.exec(text))){
+      var valueStart = m.index + m[0].length;
+      occurrences.push({ valueStart: valueStart, valueEnd: findJsonValueEnd(text, valueStart) });
+    }
+    return occurrences;
+  }
+
+  // Identifies a value's JSON type by peeking at its first character(s) --
+  // used to apply type:kind against plain rendered text, no parsed data needed.
+  function sniffJsonValueType(text, pos){
+    var c = text[pos];
+    if (c === '"') return 'string';
+    if (c === '{') return 'object';
+    if (c === '[') return 'array';
+    if (text.slice(pos, pos + 4) === 'true' || text.slice(pos, pos + 5) === 'false') return 'boolean';
+    if (text.slice(pos, pos + 4) === 'null') return 'null';
+    return 'number';
+  }
+
+  // Wraps the given [start,end) character ranges (in the coordinate space of
+  // root's own flattened text content) in <mark> elements, splitting across
+  // text-node boundaries if a range happens to span more than one.
+  function highlightRangesInDom(root, ranges, markClass){
+    markClass = markClass || 'jv-mark';
+    var marks = [];
+    if (!ranges.length) return marks;
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    var textNodes = [];
+    var n;
+    while ((n = walker.nextNode())) textNodes.push(n);
+
+    var rangeIdx = 0;
+    var globalPos = 0;
+    for (var t = 0; t < textNodes.length && rangeIdx < ranges.length; t++){
+      var node = textNodes[t];
+      var text = node.nodeValue;
+      var nodeStart = globalPos;
+      var nodeEnd = globalPos + text.length;
+
+      var pieces = [];
+      while (rangeIdx < ranges.length && ranges[rangeIdx].start < nodeEnd){
+        var r = ranges[rangeIdx];
+        var localStart = Math.max(0, r.start - nodeStart);
+        var localEnd = Math.min(text.length, r.end - nodeStart);
+        if (localEnd > localStart) pieces.push({ start: localStart, end: localEnd, path: r.path });
+        if (r.end <= nodeEnd) rangeIdx++; else break;
+      }
+
+      if (pieces.length){
+        var frag = document.createDocumentFragment();
+        var cursor = 0;
+        pieces.forEach(function(p){
+          if (p.start > cursor) frag.appendChild(document.createTextNode(text.slice(cursor, p.start)));
+          var mark = document.createElement('mark');
+          mark.className = markClass;
+          mark.textContent = text.slice(p.start, p.end);
+          if (p.path) mark._path = p.path;
+          frag.appendChild(mark);
+          marks.push(mark);
+          cursor = p.end;
+        });
+        if (cursor < text.length) frag.appendChild(document.createTextNode(text.slice(cursor)));
+        node.parentNode.replaceChild(frag, node);
+      }
+      globalPos = nodeEnd;
+    }
+    return marks;
+  }
+
+  // Field-scoped (in:/has:) search over one flat block of pretty-printed text --
+  // used by both String view and Compare mode, since they're the same shape
+  // (a read-only <pre>) and neither has tree/path machinery to hang a scope off
+  // of. Scans the rendered text directly for "fieldName": occurrences and bounds
+  // each match to that value's own span -- otherwise "in:locationCode" would
+  // just highlight "main" wherever it appears in the whole document.
+  // dataPaths (optional): from collectFieldOccurrencePaths, same document order
+  // as findFieldOccurrencesInText's own occurrences -- so dataPaths[i] is the
+  // path to occurrences[i] regardless of whether q matched, keeping the two
+  // aligned by plain index. Every range produced from one occurrence (whether
+  // it's a single scalar hit or several found inside a block) shares that same
+  // path -- precise to the matched field itself, not to a nested leaf inside it.
+  function highlightFieldScopedInText(pre, fieldName, q, typeFilter, truncatedRef, markClass, dataPaths){
+    if (!pre) return [];
+    var text = pre.textContent;
+    var occurrences = findFieldOccurrencesInText(text, fieldName);
+    var ranges = [];
+    for (var i = 0; i < occurrences.length; i++){
+      if (ranges.length >= MAX_SEARCH_MATCHES){ truncatedRef.value = true; break; }
+      var occ = occurrences[i];
+      var occPath = dataPaths && dataPaths[i] ? dataPaths[i] : null;
+      if (typeFilter && sniffJsonValueType(text, occ.valueStart) !== typeFilter) continue;
+      if (q === ''){
+        ranges.push({ start: occ.valueStart, end: occ.valueEnd, path: occPath });
+        continue;
+      }
+      var slice = text.slice(occ.valueStart, occ.valueEnd).toLowerCase();
+      var last = 0, idx;
+      while ((idx = slice.indexOf(q, last)) !== -1){
+        if (ranges.length >= MAX_SEARCH_MATCHES){ truncatedRef.value = true; break; }
+        ranges.push({ start: occ.valueStart + idx, end: occ.valueStart + idx + q.length, path: occPath });
+        last = idx + q.length;
+      }
+    }
+    return highlightRangesInDom(pre, ranges, markClass);
+  }
+
+  var TYPE_TO_SYNTAX_CLASS = { string: 'jv-string', number: 'jv-number', boolean: 'jv-bool', null: 'jv-null' };
+
+  // type:kind alone (no in:/has:) over flat text: object/array values aren't
+  // individually wrapped in their own span in String/Compare view (only
+  // primitives are, by the syntax highlighter), so those two kinds aren't
+  // supported without a field to anchor on -- everything else is scoped to
+  // text nodes whose parent already carries the matching syntax class.
+  // dataPaths (optional): from collectTypedValuePaths, same document order as
+  // this function's own per-node scan -- occIndex only advances on nodes that
+  // will actually produce a mark (i.e. pass the q filter too), matching how
+  // collectTypedValuePaths enumerates every value of the type regardless of q
+  // (q isn't part of what it filters on), so the two line up by plain index.
+  function highlightTypedTextIn(root, typeFilter, q, truncatedRef, markClass, dataPaths){
+    var cls = TYPE_TO_SYNTAX_CLASS[typeFilter];
+    var marks = [];
+    if (!cls) return marks;
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
+    var textNodes = [];
+    var n;
+    while ((n = walker.nextNode())) textNodes.push(n);
+
+    var occIndex = -1;
+    for (var t = 0; t < textNodes.length; t++){
+      if (truncatedRef.value) break;
+      var node = textNodes[t];
+      if (!node.parentElement || !node.parentElement.classList.contains(cls)) continue;
+      var text = node.nodeValue;
+      var lower = text.toLowerCase();
+      if (q && lower.indexOf(q) === -1) continue;
+
+      occIndex++;
+      var path = dataPaths && dataPaths[occIndex] ? dataPaths[occIndex] : null;
+
+      if (!q){
+        var whole = document.createElement('mark');
+        whole.className = markClass;
+        whole.textContent = text;
+        if (path) whole._path = path;
+        node.parentNode.replaceChild(whole, node);
+        marks.push(whole);
+        if (marks.length >= MAX_SEARCH_MATCHES){ truncatedRef.value = true; break; }
+        continue;
+      }
+
+      var frag = document.createDocumentFragment();
+      var last = 0, idx;
+      while ((idx = lower.indexOf(q, last)) !== -1){
+        if (marks.length >= MAX_SEARCH_MATCHES){ truncatedRef.value = true; break; }
+        if (idx > last) frag.appendChild(document.createTextNode(text.slice(last, idx)));
+        var mark = document.createElement('mark');
+        mark.className = markClass;
+        mark.textContent = text.slice(idx, idx + q.length);
+        if (path) mark._path = path;
+        frag.appendChild(mark);
+        marks.push(mark);
+        last = idx + q.length;
+      }
+      if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+      node.parentNode.replaceChild(frag, node);
+    }
+    return marks;
+  }
+
+  // parsed: {field, type, text, declared} -- field (in:/has:) and type (type:)
+  // are both honored in every view: Tree/Preview/Collapsible via the path-based
+  // matchers, String view via the text-based ones above. declared matches (any
+  // query involving in:/type:/has:) get the violet jv-mark-declared color
+  // instead of the regular yellow jv-mark, so it's visually clear what a
+  // declaration found versus plain text.
+  function applySearchHighlight(parsed){
+    state.marks = [];
+    state.markIndex = -1;
+    state.searchTruncated = false;
+
+    var text = parsed.text || '';
+    var q = text.toLowerCase();
+    var fieldLower = parsed.field ? parsed.field.toLowerCase() : null;
+    var typeFilter = parsed.type || null;
+    var hasField = !!fieldLower;
+    var declared = hasField || !!typeFilter;
+    var markClass = declared ? 'jv-mark-declared' : 'jv-mark';
+
+    if (!q && !declared){
+      el.searchCount.textContent = '';
+      document.getElementById('searchBreadcrumb').hidden = true;
+      return;
+    }
+
+    var truncatedRef = { value: false };
+
+    if (state.view === 'string'){
+      var pre = el.outputContent.querySelector('pre');
+      if (hasField){
+        var fieldPaths = [];
+        collectFieldOccurrencePaths(state.parsed, fieldLower, [], fieldPaths);
+        state.marks = highlightFieldScopedInText(pre, parsed.field, q, typeFilter, truncatedRef, markClass, fieldPaths);
+      } else if (typeFilter){
+        var typedPaths = [];
+        collectTypedValuePaths(state.parsed, typeFilter, [], typedPaths);
+        state.marks = highlightTypedTextIn(el.outputContent, typeFilter, q, truncatedRef, markClass, typedPaths);
+      } else if (q){
+        highlightTextIn(el.outputContent, q, truncatedRef, markClass);
+      }
+      state.searchTruncated = truncatedRef.value;
+    } else if (treeRootWrap){
+      var paths = [];
+      if (hasField) findFieldScopedMatches(state.parsed, fieldLower, q, typeFilter, [], paths, MAX_SEARCH_MATCHES);
+      else collectMatchingPaths(state.parsed, q, typeFilter, [], paths, MAX_SEARCH_MATCHES);
+
+      if (declared && q === ''){
+        // browse mode: mark the whole revealed value/block, no substring highlighting.
+        // Prefer the leaf value if there is one; for a container match (a whole
+        // block, e.g. "in:operatingHours" with no text) prefer its key label,
+        // since that's always visible -- the fold summary can be hidden when
+        // the node happens to already be auto-expanded.
+        paths.forEach(function(path){
+          var node = revealPath(path);
+          var valueEl = node && (
+            node.querySelector('.jv-string, .jv-number, .jv-bool, .jv-null') ||
+            node.querySelector('.tv-key') ||
+            node.querySelector('.tv-summary')
+          );
+          if (valueEl && state.marks.length < MAX_SEARCH_MATCHES){
+            valueEl.classList.add(markClass);
+            state.marks.push(valueEl);
+          }
+        });
+        state.searchTruncated = paths.length >= MAX_SEARCH_MATCHES;
+      } else if (declared){
+        paths.forEach(function(path){
+          if (truncatedRef.value) return;
+          var node = revealPath(path);
+          if (node) highlightTextIn(node, q, truncatedRef, markClass);
+        });
+        state.searchTruncated = truncatedRef.value;
+      } else {
+        paths.forEach(revealPath);
+        highlightTextIn(el.outputContent, q, truncatedRef, markClass);
+        state.searchTruncated = truncatedRef.value;
+      }
+    }
+
+    if (state.marks.length){
+      state.markIndex = 0;
+      setCurrentMatch();
+    } else {
+      el.searchCount.textContent = 'No matches';
+      document.getElementById('searchBreadcrumb').hidden = true;
+      hideMatchJumpFloat();
+    }
+    renderSearchResultsList();
+  }
+
+  function setCurrentMatch(){
+    state.marks.forEach(function(m){ m.classList.remove('jv-current'); });
+    var m = state.marks[state.markIndex];
+    if (!m) return;
+    m.classList.add('jv-current');
+    m.scrollIntoView({ block: 'center' });
+    el.searchCount.textContent = (state.markIndex + 1) + ' / ' + state.marks.length + (state.searchTruncated ? '+' : '');
+
+    var bc = document.getElementById('searchBreadcrumb');
+    var path = pathForMark(m);
+    if (path){
+      bc.textContent = formatBreadcrumb(path);
+      bc.hidden = false;
+    } else {
+      bc.hidden = true;
+    }
+    showMatchJumpFloat(m, path);
+    highlightActiveResultItem();
+  }
+
+  // Floats directly above the current match (not the whole row) so it never
+  // covers the rest of a long value -- e.g. searching "Main" inside "Main
+  // Dining Room..." puts this above just "Main". Positioned in JS from the
+  // mark's own bounding rect since it has to track an arbitrary inline word,
+  // not a fixed layout position.
+  function showMatchJumpFloat(mark, path){
+    var floatEl = document.getElementById('matchJumpFloat');
+    if (!path){ floatEl.hidden = true; return; }
+    var rect = mark.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0){ floatEl.hidden = true; return; }
+    if (rect.bottom < 0 || rect.top > window.innerHeight){ floatEl.hidden = true; return; }
+    floatEl.style.left = (rect.left + rect.width / 2) + 'px';
+    floatEl.style.top = rect.top + 'px';
+    floatEl.onclick = function(){ jumpToSource(path); };
+    floatEl.hidden = false;
+  }
+  function hideMatchJumpFloat(){
+    document.getElementById('matchJumpFloat').hidden = true;
+  }
+
+  function navigateMatch(dir){
+    if (!state.marks.length) return;
+    state.markIndex = (state.markIndex + dir + state.marks.length) % state.marks.length;
+    setCurrentMatch();
+  }
+
+  // ---------- search results list ----------
+  // Optional scannable list of every current match (path + snippet), shown
+  // below the search bar instead of a blocking modal -- toggled on demand so
+  // it costs nothing when not open.
+  function snippetForMark(mark){
+    var row = mark.closest ? mark.closest('.tv-row') : null;
+    if (row) return row.textContent.trim();
+    var pre = mark.closest ? mark.closest('pre') : null;
+    if (pre && mark.parentElement && mark.parentElement !== pre) return mark.parentElement.textContent.trim();
+    return mark.textContent;
+  }
+
+  var searchResultsOpen = false;
+  function setSearchResultsListOpen(open){
+    searchResultsOpen = open;
+    var listEl = document.getElementById('searchResultsList');
+    listEl.hidden = !open;
+    document.getElementById('btnSearchResultsToggle').classList.toggle('active', open);
+    if (open) renderSearchResultsList();
+  }
+  function renderSearchResultsList(){
+    if (!searchResultsOpen) return;
+    var listEl = document.getElementById('searchResultsList');
+    listEl.innerHTML = '';
+    if (!state.marks.length){
+      var empty = document.createElement('div');
+      empty.className = 'search-results-empty';
+      empty.textContent = 'No matches';
+      listEl.appendChild(empty);
+      return;
+    }
+    state.marks.forEach(function(mark, i){
+      var item = document.createElement('div');
+      item.className = 'search-result-item' + (i === state.markIndex ? ' active' : '');
+      var path = pathForMark(mark);
+      if (path){
+        var pathEl = document.createElement('div');
+        pathEl.className = 'search-result-path';
+        pathEl.textContent = formatBreadcrumb(path);
+        item.appendChild(pathEl);
+      }
+      var snippetEl = document.createElement('div');
+      snippetEl.className = 'search-result-snippet';
+      snippetEl.textContent = snippetForMark(mark);
+      item.appendChild(snippetEl);
+      item.addEventListener('click', function(){
+        state.markIndex = i;
+        setCurrentMatch();
+      });
+      listEl.appendChild(item);
+    });
+  }
+  function highlightActiveResultItem(){
+    if (!searchResultsOpen) return;
+    var listEl = document.getElementById('searchResultsList');
+    var items = listEl.querySelectorAll('.search-result-item');
+    items.forEach(function(it, i){ it.classList.toggle('active', i === state.markIndex); });
+    var active = items[state.markIndex];
+    if (active) active.scrollIntoView({ block: 'nearest' });
+  }
+  document.getElementById('btnSearchResultsToggle').addEventListener('click', function(){
+    setSearchResultsListOpen(!searchResultsOpen);
+  });
+
+  // ---------- init ----------
+  renderSidebar();
+  parseNow();
+})();
+</script>
+
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+</script>
+</body>
+</html>

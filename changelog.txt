@@ -1,0 +1,69 @@
+Changelog
+
+v1.10
+New Features
+Tree is now the default view when JSON loads, instead of String
+One-time tip points out the expand-options button the first time you load JSON - never shows again once dismissed or used
+
+v1.9
+New Features
+Current search match now shows its exact path (e.g. payload.venues[1].advisements[11].advisementID) below the search box
+New results-list button opens a scannable list of every match with its path and a short snippet - click any entry to jump straight to it, instead of only stepping through with next/prev
+
+v1.8
+New Features
+type: search declaration - restrict matches to a JSON value kind (string, number, boolean, null, object, array)
+has:field search declaration - alias for in:field with no search text, lists every object that has that field
+Improvements
+Matches found via a declaration (in:/type:/has:) now highlight in a distinct violet color instead of the regular yellow, so it's clear which part of a query found them
+All search declarations now work in Compare mode too - it previously only ever did a plain literal-text search, so in: there matched nothing
+Fixes
+Fixed the "Expand only these fields" popover closing itself the moment you picked a suggestion or removed a chip
+
+v1.7
+New Features
+"Expand only these fields" - pick specific fields to expand (with autocomplete), leaving everything else collapsed, instead of only Expand All / Collapse All
+Improvements
+Sessions panel can now be closed from its own header, not just the toolbar toggle
+Fixes
+Fixed field-scoped search (in:) only working correctly in Tree/Preview/Collapsible - it now scopes correctly in String view too, instead of matching anywhere in the document
+Fixed keys and string values never actually getting their syntax color in String view (a color-coding bug, not just a missing feature - only punctuation and numbers were ever colored)
+
+v1.6
+New Features
+Compare mode - view two sessions side by side, each with its own independent search, to manually check two similar files against each other
+
+v1.5
+New Features
+Sessions panel on the left - upload multiple files without losing earlier ones, rename, delete, and switch between them
+Guide / FAQ / Changelog panel (this page)
+
+v1.4
+New Features
+Field-scoped search: in:fieldName, with autocomplete, block-scoped text search, and browse-all-values mode
+Line numbers in the Source input and String output view
+
+v1.3
+Fixes
+Fixed a major slowdown switching to Tree/Preview/Collapsible on large files - the tree now only builds DOM for expanded branches instead of the entire dataset up front
+Search rewritten to work against the underlying data directly, so it stays fast and still finds matches in collapsed branches
+Improvements
+Added a minimum search length and a match cap to keep broad queries from stalling the page
+
+v1.2
+Improvements
+Reworked the color theme to match our other tools' palette, with consistent hover states across all buttons
+Added multiple syntax color themes (Default, Vivid, Solarized, Pastel, Monochrome)
+Moved Copy/Download/Search into the output panel, next to the view tabs
+
+v1.1
+New Features
+Added Preview view - a devtools-style collapsed summary showing real content instead of just a count
+
+v1.0
+Initial Release
+String / Tree / Collapsible views
+Resizable side-by-side or stacked layout
+Upload / drag & drop
+Copy, download, and search
+100% client-side processing - no data sent to servers
